@@ -4,6 +4,7 @@ import 'pages/history_page.dart';
 import 'pages/details_page.dart';
 import 'pages/dayEvents_page.dart';
 import 'pages/gate_page.dart';
+import 'pages/calendar_page.dart';
 
 void main() {
   runApp(const SmaarApp());
@@ -27,10 +28,11 @@ class SmaarApp extends StatelessWidget {
       // Mapeando os nomes das rotas para as páginas
       routes: {
         '/': (context) => const MainPage(),
-        '/history': (context) => const HistoryPage(),
-        '/details': (context) => const DetailsPage(),
         '/gate': (context) => const GatePage(),
+        '/history': (context) => const HistoryPage(),
+        '/calendar': (context) => const CalendarPage(),
         '/dayEvents': (context) => const DayEventsPage(),
+        '/details': (context) => const DetailsPage(),
       },
     );
   }
