@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
+import '../models/models.dart';
 
+/// Card de Porteira reutilizável
 class GateCard extends StatelessWidget {
-  final String name;
-  final String limitTime;
-  final bool isClosed;
-  final VoidCallback onHistoryTap;
+  final Gate gate;
   final VoidCallback onTap;
+  final VoidCallback onHistoryTap;
 
   const GateCard({
     super.key,
-    required this.name,
-    required this.limitTime,
-    required this.isClosed,
-    required this.onHistoryTap,
+    required this.gate,
     required this.onTap,
+    required this.onHistoryTap,
   });
 
   @override
@@ -24,7 +22,7 @@ class GateCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.grey[200], // Fundo cinza claro como solicitado
+          color: Colors.grey[200],
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
@@ -36,7 +34,7 @@ class GateCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Ícone da porteira/fazenda
+            // Ícone da porteira
             CircleAvatar(
               radius: 30,
               backgroundColor: Colors.grey[300],
@@ -44,13 +42,13 @@ class GateCard extends StatelessWidget {
             ),
             const SizedBox(width: 16),
 
-            // Informações Centrais
+            // Informações centrais
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    name,
+                    gate.name,
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -63,7 +61,7 @@ class GateCard extends StatelessWidget {
                     style: TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                   Text(
-                    limitTime,
+                    gate.limitTimeFormatted,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -74,12 +72,12 @@ class GateCard extends StatelessWidget {
               ),
             ),
 
-            // Ícones de Status e Histórico
+            // Ícones de status e histórico
             Row(
               children: [
                 Icon(
-                  isClosed ? Icons.lock : Icons.lock_open,
-                  color: isClosed ? Colors.teal : Colors.redAccent,
+                  gate.isClosed ? Icons.lock : Icons.lock_open,
+                  color: gate.isClosed ? Colors.teal : Colors.redAccent,
                   size: 35,
                 ),
                 const SizedBox(width: 10),

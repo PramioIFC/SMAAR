@@ -1,13 +1,38 @@
 import 'package:flutter/material.dart';
-import '../widgets/gate_card.dart';
+import '../models/models.dart';
+import '../repositories/repositories/repositories.dart';
+import '../widgets/widgets.dart';
 
-class MainPage extends StatelessWidget {
+class MainPage extends StatefulWidget {
   const MainPage({super.key});
+
+  @override
+  State<MainPage> createState() => _MainPageState();
+}
+
+class _MainPageState extends State<MainPage> {
+  final GateRepository _gateRepository = MockGateRepository();
+  List<Gate> _gates = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGates();
+  }
+
+  Future<void> _loadGates() async {
+    final gates = await _gateRepository.getAllGates();
+    setState(() {
+      _gates = gates;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Fundo clean
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -15,29 +40,7 @@ class MainPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header Superior
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "tela principal",
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
-                  ),
-                  Row(
-                    children: [
-                      const Icon(Icons.logout, color: Colors.black87),
-                      const SizedBox(width: 20),
-                      CircleAvatar(
-                        backgroundColor: Colors.grey[300],
-                        child: const Icon(
-                          Icons.person_outline,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
+              _buildHeader(),
               const SizedBox(height: 40),
 
               // Saudação
@@ -49,69 +52,61 @@ class MainPage extends StatelessWidget {
                   letterSpacing: -0.5,
                 ),
               ),
-
               const SizedBox(height: 30),
 
               // Lista de Porteiras
               Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    GateCard(
-                      name: "Porteira 1",
-                      limitTime: "6:00-23:00",
-                      isClosed: true,
-                      // Mudança aqui: de /details para /gate
-                      onTap: () => Navigator.pushNamed(
-                        context,
-                        '/gate',
-                        arguments: "Porteira 1",
-                      ),
-                      onHistoryTap: () =>
-                          Navigator.pushNamed(context, '/history'),
-                    ),
-                    GateCard(
-                      name: "Porteira 2",
-                      limitTime: "9:00-22:00",
-                      isClosed: false,
-                      onTap: () => Navigator.pushNamed(
-                        context,
-                        '/gate',
-                        arguments: "Porteira 2",
-                      ),
-                      onHistoryTap: () =>
-                          Navigator.pushNamed(context, '/history'),
-                    ),
-                    GateCard(
-                      name: "Porteira 3",
-                      limitTime: "9:00-22:00",
-                      isClosed: true,
-                      onTap: () => Navigator.pushNamed(
-                        context,
-                        '/gate',
-                        arguments: "Porteira 3",
-                      ),
-                      onHistoryTap: () =>
-                          Navigator.pushNamed(context, '/history'),
-                    ),
-                  ],
-                ),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildGateList(),
               ),
             ],
           ),
         ),
       ),
-
-      // Botão Flutuante para Adicionar
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Exemplo: Direcionando para eventos do dia ou criação
-          Navigator.pushNamed(context, '/dayEvents');
-        },
+        onPressed: () => Navigator.pushNamed(context, '/dayEvents'),
         backgroundColor: Colors.grey[300],
         elevation: 2,
         child: const Icon(Icons.add, color: Colors.black, size: 30),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          "tela principal",
+          style: TextStyle(color: Colors.grey, fontSize: 16),
+        ),
+        Row(
+          children: [
+            const Icon(Icons.logout, color: Colors.black87),
+            const SizedBox(width: 20),
+            CircleAvatar(
+              backgroundColor: Colors.grey[300],
+              child: const Icon(Icons.person_outline, color: Colors.black),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGateList() {
+    return ListView.builder(
+      physics: const BouncingScrollPhysics(),
+      itemCount: _gates.length,
+      itemBuilder: (context, index) {
+        final gate = _gates[index];
+        return GateCard(
+          gate: gate,
+          onTap: () => Navigator.pushNamed(context, '/gate', arguments: gate),
+          onHistoryTap: () => Navigator.pushNamed(context, '/history'),
+        );
+      },
     );
   }
 }

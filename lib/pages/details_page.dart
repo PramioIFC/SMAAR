@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 class DetailsPage extends StatelessWidget {
-  // Altere para DetailsPage ou DayEventsPage conforme o arquivo
   const DetailsPage({super.key});
 
   @override

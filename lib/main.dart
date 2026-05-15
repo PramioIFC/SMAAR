@@ -1,10 +1,5 @@
 import 'package:flutter/material.dart';
-import 'pages/main_page.dart';
-import 'pages/history_page.dart';
-import 'pages/details_page.dart';
-import 'pages/dayEvents_page.dart';
-import 'pages/gate_page.dart';
-import 'pages/calendar_page.dart';
+import 'pages/pages.dart';
 
 void main() {
   runApp(const SmaarApp());
@@ -17,21 +12,19 @@ class SmaarApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SMAAR',
-      debugShowCheckedModeBanner: false, // Remove a faixa de debug
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4CAF50)),
         useMaterial3: true,
-        primarySwatch: Colors.blue,
-        fontFamily: 'sans-serif', // Garante um visual moderno
+        fontFamily: 'Roboto',
       ),
-      // Definindo a tela inicial
       initialRoute: '/',
-      // Mapeando os nomes das rotas para as páginas
       routes: {
         '/': (context) => const MainPage(),
         '/gate': (context) => const GatePage(),
         '/history': (context) => const HistoryPage(),
-        '/calendar': (context) => const CalendarPage(),
         '/dayEvents': (context) => const DayEventsPage(),
+        '/calendar': (context) => const CalendarPage(),
         '/details': (context) => const DetailsPage(),
       },
     );
