@@ -104,7 +104,7 @@ class _MainPageState extends State<MainPage> {
         return GateCard(
           gate: gate,
           onTap: () => Navigator.pushNamed(context, '/gate', arguments: gate),
-          onHistoryTap: () => Navigator.pushNamed(context, '/history'),
+          onHistoryTap: () => Navigator.pushNamed(context, '/history', arguments: gate.id),
         );
       },
     );

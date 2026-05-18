@@ -61,7 +61,7 @@ class GatePage extends StatelessWidget {
               const SizedBox(height: 15),
               _buildActionButtons(),
               const SizedBox(height: 15),
-              _buildHistoryButton(context),
+              _buildHistoryButton(context, gate),
               const SizedBox(height: 20),
             ],
           ),
@@ -188,9 +188,9 @@ class GatePage extends StatelessWidget {
     );
   }
 
-  Widget _buildHistoryButton(BuildContext context) {
+  Widget _buildHistoryButton(BuildContext context, Gate gate) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/history'),
+      onTap: () => Navigator.pushNamed(context, '/history', arguments: gate.id),
       child: Container(
         width: double.infinity,
         height: 60,

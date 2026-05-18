@@ -17,6 +17,7 @@ class _CalendarPageState extends State<CalendarPage> {
   late int _currentYear;
   late int _currentMonth;
   int? _selectedDay;
+  int? _gateId;
   Map<String, DayLog> _logsForMonth = {};
 
   @override
@@ -25,14 +26,26 @@ class _CalendarPageState extends State<CalendarPage> {
     final now = DateTime.now();
     _currentYear = now.year;
     _currentMonth = now.month;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Recebe o gateId para filtrar logs da porteira correta
+    _gateId = ModalRoute.of(context)?.settings.arguments as int?;
     _loadLogsForMonth();
   }
 
   Future<void> _loadLogsForMonth() async {
-    final logs = await _logRepository.getLogsForMonth(
-      _currentYear,
-      _currentMonth,
-    );
+    final Map<String, DayLog> logs;
+
+    if (_gateId != null) {
+      logs = await _logRepository.getLogsForGateAndMonth(
+          _gateId!, _currentYear, _currentMonth);
+    } else {
+      logs = await _logRepository.getLogsForMonth(_currentYear, _currentMonth);
+    }
+
     setState(() {
       _logsForMonth = logs;
     });
@@ -68,10 +81,10 @@ class _CalendarPageState extends State<CalendarPage> {
     const int minYear = 2000;
     const int maxYear = 2040;
     final years = List.generate(maxYear - minYear + 1, (i) => minYear + i);
-    final initialIndex = years.indexOf(_currentYear).clamp(0, years.length - 1);
-    final scrollController = FixedExtentScrollController(
-      initialItem: initialIndex,
-    );
+    final initialIndex =
+        years.indexOf(_currentYear).clamp(0, years.length - 1);
+    final scrollController =
+        FixedExtentScrollController(initialItem: initialIndex);
     int tempYear = _currentYear;
 
     showModalBottomSheet(
@@ -91,22 +104,18 @@ class _CalendarPageState extends State<CalendarPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 40,
-                    height: 4,
+                    width: 40, height: 4,
                     decoration: BoxDecoration(
                       color: Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    "Selecionar Ano",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
+                  const Text("Selecionar Ano",
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87)),
                   const SizedBox(height: 24),
                   SizedBox(
                     height: 220,
@@ -150,8 +159,7 @@ class _CalendarPageState extends State<CalendarPage> {
                         backgroundColor: const Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                            borderRadius: BorderRadius.circular(16)),
                         elevation: 0,
                       ),
                       onPressed: () {
@@ -162,13 +170,9 @@ class _CalendarPageState extends State<CalendarPage> {
                         _loadLogsForMonth();
                         Navigator.pop(ctx);
                       },
-                      child: const Text(
-                        "Confirmar",
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: const Text("Confirmar",
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -197,9 +201,8 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
           backgroundColor: Colors.black87,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -207,8 +210,11 @@ class _CalendarPageState extends State<CalendarPage> {
       Navigator.pushNamed(
         context,
         '/dayEvents',
-        arguments:
-            "$day de ${DateHelper.monthNames[_currentMonth - 1]} de $_currentYear",
+        arguments: {
+          'dateLabel':
+              "$day de ${DateHelper.monthNames[_currentMonth - 1]} de $_currentYear",
+          'gateId': _gateId,
+        },
       );
     }
   }
@@ -274,11 +280,8 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(
-                Icons.arrow_drop_down,
-                color: Color(0xFF4CAF50),
-                size: 28,
-              ),
+              const Icon(Icons.arrow_drop_down,
+                  color: Color(0xFF4CAF50), size: 28),
             ],
           ),
         ),
@@ -295,20 +298,15 @@ class _CalendarPageState extends State<CalendarPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: days
-          .map(
-            (d) => SizedBox(
-              width: 40,
-              child: Text(
-                d,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black54,
-                ),
-              ),
-            ),
-          )
+          .map((d) => SizedBox(
+                width: 40,
+                child: Text(d,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black54)),
+              ))
           .toList(),
     );
   }
@@ -336,7 +334,6 @@ class _CalendarPageState extends State<CalendarPage> {
           itemCount: totalCells,
           itemBuilder: (context, index) {
             final dayNumber = index - offset + 1;
-
             if (index < offset || dayNumber > totalDays) {
               return const SizedBox.shrink();
             }

@@ -17,19 +17,40 @@ class _DayEventsPageState extends State<DayEventsPage> {
   bool _isLoading = true;
   late String _dateLabel;
   late String _dateKey;
+  int? _gateId;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _dateLabel =
-        ModalRoute.of(context)?.settings.arguments as String? ??
-        "Data desconhecida";
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+
+    if (args is Map) {
+      _dateLabel = args['dateLabel'] as String? ?? "Data desconhecida";
+      _gateId = args['gateId'] as int?;
+    } else if (args is String) {
+      // Compatibilidade: chamada sem gateId (ex: direto do calendar sem porteira)
+      _dateLabel = args;
+      _gateId = null;
+    } else {
+      _dateLabel = "Data desconhecida";
+      _gateId = null;
+    }
+
     _dateKey = DateHelper.toDateKey(_dateLabel);
     _loadEvents();
   }
 
   Future<void> _loadEvents() async {
-    final events = await _eventRepository.getEventsForDateKey(_dateKey);
+    final List<DayEvent> events;
+
+    if (_gateId != null) {
+      events = await _eventRepository.getEventsForGateAndDateKey(
+          _gateId!, _dateKey);
+    } else {
+      events = await _eventRepository.getEventsForDateKey(_dateKey);
+    }
+
     setState(() {
       _events = events;
       _isLoading = false;
@@ -51,8 +72,8 @@ class _DayEventsPageState extends State<DayEventsPage> {
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _events.isEmpty
-                  ? EmptyState.noEvents()
-                  : _buildTimeline(),
+                      ? EmptyState.noEvents()
+                      : _buildTimeline(),
             ),
             _buildBottomButton(context),
           ],
@@ -67,11 +88,8 @@ class _DayEventsPageState extends State<DayEventsPage> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              size: 26,
-              color: Colors.black87,
-            ),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                size: 26, color: Colors.black87),
             onPressed: () => Navigator.pop(context),
           ),
           const SizedBox(width: 4),
@@ -125,26 +143,25 @@ class _DayEventsPageState extends State<DayEventsPage> {
         width: double.infinity,
         height: 60,
         child: OutlinedButton.icon(
-          onPressed: () => Navigator.pushNamed(context, '/calendar'),
+          onPressed: () => Navigator.pushNamed(
+            context,
+            '/calendar',
+            arguments: _gateId,
+          ),
           style: OutlinedButton.styleFrom(
             side: const BorderSide(color: Color(0xFF185FA5), width: 1.5),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
+                borderRadius: BorderRadius.circular(18)),
             backgroundColor: Colors.white,
           ),
-          icon: const Icon(
-            Icons.calendar_month_rounded,
-            color: Color(0xFF185FA5),
-            size: 24,
-          ),
+          icon: const Icon(Icons.calendar_month_rounded,
+              color: Color(0xFF185FA5), size: 24),
           label: const Text(
             "Ver outro dia",
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF185FA5),
-            ),
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF185FA5)),
           ),
         ),
       ),

@@ -7,6 +7,9 @@ class HistoryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Recebe o gateId da porteira selecionada
+    final gateId = ModalRoute.of(context)?.settings.arguments as int?;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -37,29 +40,28 @@ class HistoryPage extends StatelessWidget {
                 children: [
                   HistoryCard.today(
                     subtitle: DateHelper.formatDate(DateTime.now()),
-                    onTap: () => _navigateToDay(context, "Hoje"),
+                    onTap: () => _navigateToDay(context, "Hoje", gateId),
                   ),
                   const SizedBox(height: 15),
                   HistoryCard.yesterday(
                     subtitle: DateHelper.formatDate(
                         DateTime.now().subtract(const Duration(days: 1))),
-                    onTap: () => _navigateToDay(context, "Ontem"),
+                    onTap: () => _navigateToDay(context, "Ontem", gateId),
                   ),
                   const SizedBox(height: 15),
-                  ..._buildPastDays(context),
+                  ..._buildPastDays(context, gateId),
                   const SizedBox(height: 20),
                 ],
               ),
             ),
-            _buildCalendarButton(context),
+            _buildCalendarButton(context, gateId),
           ],
         ),
       ),
     );
   }
 
-  /// Gera os cards dos dias 2..5 atrás dinamicamente
-  List<Widget> _buildPastDays(BuildContext context) {
+  List<Widget> _buildPastDays(BuildContext context, int? gateId) {
     final widgets = <Widget>[];
     for (int i = 2; i <= 5; i++) {
       final date = DateTime.now().subtract(Duration(days: i));
@@ -67,7 +69,7 @@ class HistoryPage extends StatelessWidget {
       widgets.add(
         HistoryCard.date(
           date: label,
-          onTap: () => _navigateToDay(context, label),
+          onTap: () => _navigateToDay(context, label, gateId),
         ),
       );
       if (i < 5) widgets.add(const SizedBox(height: 15));
@@ -75,25 +77,27 @@ class HistoryPage extends StatelessWidget {
     return widgets;
   }
 
-  void _navigateToDay(BuildContext context, String dateLabel) {
-    Navigator.pushNamed(context, '/dayEvents', arguments: dateLabel);
+  void _navigateToDay(BuildContext context, String dateLabel, int? gateId) {
+    Navigator.pushNamed(
+      context,
+      '/dayEvents',
+      arguments: {'dateLabel': dateLabel, 'gateId': gateId},
+    );
   }
 
-  Widget _buildCalendarButton(BuildContext context) {
+  Widget _buildCalendarButton(BuildContext context, int? gateId) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 30.0, top: 10.0),
       child: GestureDetector(
-        onTap: () => Navigator.pushNamed(context, '/calendar'),
+        onTap: () =>
+            Navigator.pushNamed(context, '/calendar', arguments: gateId),
         child: Container(
           width: double.infinity,
           height: 65,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFF1565C0),
-              width: 2,
-            ),
+            border: Border.all(color: const Color(0xFF1565C0), width: 2),
           ),
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
