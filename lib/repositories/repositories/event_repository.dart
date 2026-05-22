@@ -239,3 +239,18 @@ class MockEventRepository implements EventRepository {
     return _byGate[gateId]?[dateKey] ?? [];
   }
 }
+
+// Exposição dos dados brutos para o bootstrap do AppState
+extension MockEventRepositoryAccess on MockEventRepository {
+  Map<int, Map<String, List<DayEvent>>> get rawByGate {
+    // Retorna uma cópia mutável profunda para que o AppState possa modificar
+    final copy = <int, Map<String, List<DayEvent>>>{};
+    for (final entry in _byGate.entries) {
+      copy[entry.key] = {};
+      for (final dayEntry in entry.value.entries) {
+        copy[entry.key]![dayEntry.key] = List<DayEvent>.from(dayEntry.value);
+      }
+    }
+    return copy;
+  }
+}

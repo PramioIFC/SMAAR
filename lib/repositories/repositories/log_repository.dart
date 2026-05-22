@@ -111,3 +111,14 @@ class MockLogRepository implements LogRepository {
     return result;
   }
 }
+
+// Exposição dos dados brutos para o bootstrap do AppState
+extension MockLogRepositoryAccess on MockLogRepository {
+  Map<int, List<DayLog>> get rawByGate {
+    final copy = <int, List<DayLog>>{};
+    for (final entry in _byGate.entries) {
+      copy[entry.key] = List<DayLog>.from(entry.value);
+    }
+    return copy;
+  }
+}

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '/app_state.dart';
 import '../models/models.dart';
-import '../repositories/repositories/repositories.dart';
 import '../widgets/widgets.dart';
 import '../utils/date_utils.dart';
 
@@ -12,13 +12,11 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
-  final LogRepository _logRepository = MockLogRepository();
-
   late int _currentYear;
   late int _currentMonth;
   int? _selectedDay;
   int? _gateId;
-  Map<String, DayLog> _logsForMonth = {};
+  bool _initialized = false;
 
   @override
   void initState() {
@@ -31,24 +29,17 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Recebe o gateId para filtrar logs da porteira correta
-    _gateId = ModalRoute.of(context)?.settings.arguments as int?;
-    _loadLogsForMonth();
+    if (!_initialized) {
+      _initialized = true;
+      _gateId = ModalRoute.of(context)?.settings.arguments as int?;
+    }
   }
 
-  Future<void> _loadLogsForMonth() async {
-    final Map<String, DayLog> logs;
-
+  Map<String, DayLog> _logsForCurrentMonth(AppStateData state) {
     if (_gateId != null) {
-      logs = await _logRepository.getLogsForGateAndMonth(
-          _gateId!, _currentYear, _currentMonth);
-    } else {
-      logs = await _logRepository.getLogsForMonth(_currentYear, _currentMonth);
+      return state.logsForGateAndMonth(_gateId!, _currentYear, _currentMonth);
     }
-
-    setState(() {
-      _logsForMonth = logs;
-    });
+    return state.logsForMonth(_currentYear, _currentMonth);
   }
 
   void _previousMonth() {
@@ -61,7 +52,6 @@ class _CalendarPageState extends State<CalendarPage> {
         _currentMonth--;
       }
     });
-    _loadLogsForMonth();
   }
 
   void _nextMonth() {
@@ -74,17 +64,16 @@ class _CalendarPageState extends State<CalendarPage> {
         _currentMonth++;
       }
     });
-    _loadLogsForMonth();
   }
 
-  void _pickYear() {
+  void _pickYear(BuildContext context) {
     const int minYear = 2000;
     const int maxYear = 2040;
     final years = List.generate(maxYear - minYear + 1, (i) => minYear + i);
-    final initialIndex =
-        years.indexOf(_currentYear).clamp(0, years.length - 1);
-    final scrollController =
-        FixedExtentScrollController(initialItem: initialIndex);
+    final initialIndex = years.indexOf(_currentYear).clamp(0, years.length - 1);
+    final scrollController = FixedExtentScrollController(
+      initialItem: initialIndex,
+    );
     int tempYear = _currentYear;
 
     showModalBottomSheet(
@@ -104,18 +93,22 @@ class _CalendarPageState extends State<CalendarPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text("Selecionar Ano",
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87)),
+                  const Text(
+                    'Selecionar Ano',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     height: 220,
@@ -159,7 +152,8 @@ class _CalendarPageState extends State<CalendarPage> {
                         backgroundColor: const Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                         elevation: 0,
                       ),
                       onPressed: () {
@@ -167,12 +161,15 @@ class _CalendarPageState extends State<CalendarPage> {
                           _currentYear = tempYear;
                           _selectedDay = null;
                         });
-                        _loadLogsForMonth();
                         Navigator.pop(ctx);
                       },
-                      child: const Text("Confirmar",
-                          style: TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Confirmar',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -184,25 +181,26 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  void _onDayTapped(int day) {
+  void _onDayTapped(BuildContext context, int day, Map<String, DayLog> logs) {
     setState(() => _selectedDay = day);
 
     final dateKey =
-        "$_currentYear-${_currentMonth.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}";
-    final log = _logsForMonth[dateKey];
+        '$_currentYear-${_currentMonth.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+    final log = logs[dateKey];
 
     if (log == null) {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Nenhum registro encontrado para $day de "
-            "${DateHelper.monthNames[_currentMonth - 1]} de $_currentYear.",
+            'Nenhum registro encontrado para $day de '
+            '${DateHelper.monthNames[_currentMonth - 1]} de $_currentYear.',
           ),
           backgroundColor: Colors.black87,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -212,7 +210,7 @@ class _CalendarPageState extends State<CalendarPage> {
         '/dayEvents',
         arguments: {
           'dateLabel':
-              "$day de ${DateHelper.monthNames[_currentMonth - 1]} de $_currentYear",
+              '$day de ${DateHelper.monthNames[_currentMonth - 1]} de $_currentYear',
           'gateId': _gateId,
         },
       );
@@ -228,6 +226,9 @@ class _CalendarPageState extends State<CalendarPage> {
 
   @override
   Widget build(BuildContext context) {
+    final state = AppState.of(context);
+    final logs = _logsForCurrentMonth(state);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -243,11 +244,11 @@ class _CalendarPageState extends State<CalendarPage> {
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Column(
             children: [
-              _buildMonthNavigator(),
+              _buildMonthNavigator(context),
               const SizedBox(height: 10),
               _buildWeekdayHeaders(),
               const SizedBox(height: 6),
-              Expanded(flex: 5, child: _buildCalendarGrid()),
+              Expanded(flex: 5, child: _buildCalendarGrid(context, logs)),
               const SizedBox(height: 10),
               const LegendContainer(),
               const SizedBox(height: 12),
@@ -258,7 +259,7 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Widget _buildMonthNavigator() {
+  Widget _buildMonthNavigator(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -267,12 +268,12 @@ class _CalendarPageState extends State<CalendarPage> {
           onPressed: _previousMonth,
         ),
         GestureDetector(
-          onTap: _pickYear,
+          onTap: () => _pickYear(context),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                "${DateHelper.monthNames[_currentMonth - 1]} $_currentYear",
+                '${DateHelper.monthNames[_currentMonth - 1]} $_currentYear',
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -280,8 +281,11 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.arrow_drop_down,
-                  color: Color(0xFF4CAF50), size: 28),
+              const Icon(
+                Icons.arrow_drop_down,
+                color: Color(0xFF4CAF50),
+                size: 28,
+              ),
             ],
           ),
         ),
@@ -294,24 +298,29 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _buildWeekdayHeaders() {
-    const days = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
+    const days = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: days
-          .map((d) => SizedBox(
-                width: 40,
-                child: Text(d,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black54)),
-              ))
+          .map(
+            (d) => SizedBox(
+              width: 40,
+              child: Text(
+                d,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black54,
+                ),
+              ),
+            ),
+          )
           .toList(),
     );
   }
 
-  Widget _buildCalendarGrid() {
+  Widget _buildCalendarGrid(BuildContext context, Map<String, DayLog> logs) {
     final offset = _startOffset;
     final totalDays = _daysInMonth;
     final totalRows = ((offset + totalDays) / 7).ceil();
@@ -339,8 +348,8 @@ class _CalendarPageState extends State<CalendarPage> {
             }
 
             final dateKey =
-                "$_currentYear-${_currentMonth.toString().padLeft(2, '0')}-${dayNumber.toString().padLeft(2, '0')}";
-            final log = _logsForMonth[dateKey];
+                '$_currentYear-${_currentMonth.toString().padLeft(2, '0')}-${dayNumber.toString().padLeft(2, '0')}';
+            final log = logs[dateKey];
             final isSelected = dayNumber == _selectedDay;
 
             return CalendarDayCell(
@@ -348,7 +357,7 @@ class _CalendarPageState extends State<CalendarPage> {
               isSelected: isSelected,
               dotColor: log?.statusColor,
               circleSize: circleSize,
-              onTap: () => _onDayTapped(dayNumber),
+              onTap: () => _onDayTapped(context, dayNumber, logs),
             );
           },
         );

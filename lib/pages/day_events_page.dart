@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../app_state.dart';
 import '../models/models.dart';
-import '../repositories/repositories/repositories.dart';
 import '../widgets/widgets.dart';
 import '../utils/date_utils.dart';
 
@@ -12,53 +12,44 @@ class DayEventsPage extends StatefulWidget {
 }
 
 class _DayEventsPageState extends State<DayEventsPage> {
-  final EventRepository _eventRepository = MockEventRepository();
-  List<DayEvent> _events = [];
-  bool _isLoading = true;
   late String _dateLabel;
   late String _dateKey;
   int? _gateId;
+  bool _initialized = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      final args = ModalRoute.of(context)?.settings.arguments;
 
-    final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is Map) {
+        _dateLabel = args['dateLabel'] as String? ?? 'Data desconhecida';
+        _gateId = args['gateId'] as int?;
+      } else if (args is String) {
+        _dateLabel = args;
+        _gateId = null;
+      } else {
+        _dateLabel = 'Data desconhecida';
+        _gateId = null;
+      }
 
-    if (args is Map) {
-      _dateLabel = args['dateLabel'] as String? ?? "Data desconhecida";
-      _gateId = args['gateId'] as int?;
-    } else if (args is String) {
-      // Compatibilidade: chamada sem gateId (ex: direto do calendar sem porteira)
-      _dateLabel = args;
-      _gateId = null;
-    } else {
-      _dateLabel = "Data desconhecida";
-      _gateId = null;
+      _dateKey = DateHelper.toDateKey(_dateLabel);
     }
-
-    _dateKey = DateHelper.toDateKey(_dateLabel);
-    _loadEvents();
   }
 
-  Future<void> _loadEvents() async {
-    final List<DayEvent> events;
-
+  List<DayEvent> _events(AppStateData state) {
     if (_gateId != null) {
-      events = await _eventRepository.getEventsForGateAndDateKey(
-          _gateId!, _dateKey);
-    } else {
-      events = await _eventRepository.getEventsForDateKey(_dateKey);
+      return state.eventsForGateAndKey(_gateId!, _dateKey);
     }
-
-    setState(() {
-      _events = events;
-      _isLoading = false;
-    });
+    return state.eventsForKey(_dateKey);
   }
 
   @override
   Widget build(BuildContext context) {
+    final state = AppState.of(context);
+    final events = _events(state);
     final isToday = _dateKey == DateHelper.todayKey;
 
     return Scaffold(
@@ -69,11 +60,9 @@ class _DayEventsPageState extends State<DayEventsPage> {
           children: [
             _buildHeader(context, isToday),
             Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _events.isEmpty
-                      ? EmptyState.noEvents()
-                      : _buildTimeline(),
+              child: events.isEmpty
+                  ? EmptyState.noEvents()
+                  : _buildTimeline(events),
             ),
             _buildBottomButton(context),
           ],
@@ -98,7 +87,7 @@ class _DayEventsPageState extends State<DayEventsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isToday ? "Hoje" : DateHelper.shortLabel(_dateLabel),
+                  isToday ? 'Hoje' : DateHelper.shortLabel(_dateLabel),
                   style: const TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.bold,
@@ -123,14 +112,14 @@ class _DayEventsPageState extends State<DayEventsPage> {
     );
   }
 
-  Widget _buildTimeline() {
+  Widget _buildTimeline(List<DayEvent> events) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      itemCount: _events.length,
+      itemCount: events.length,
       itemBuilder: (context, index) {
         return EventTimelineItem(
-          event: _events[index],
-          isLast: index == _events.length - 1,
+          event: events[index],
+          isLast: index == events.length - 1,
         );
       },
     );
@@ -157,7 +146,7 @@ class _DayEventsPageState extends State<DayEventsPage> {
           icon: const Icon(Icons.calendar_month_rounded,
               color: Color(0xFF185FA5), size: 24),
           label: const Text(
-            "Ver outro dia",
+            'Ver outro dia',
             style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,

@@ -1,25 +1,59 @@
 import 'package:flutter/material.dart';
+import '../app_state.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
 
-class GatePage extends StatelessWidget {
+class GatePage extends StatefulWidget {
   const GatePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)!.settings.arguments;
-    final Gate gate;
+  State<GatePage> createState() => _GatePageState();
+}
 
-    if (args is Gate) {
-      gate = args;
-    } else {
-      gate = Gate(
-        name: args as String? ?? "Porteira",
-        limitTimeStart: "00:00",
-        limitTimeEnd: "00:00",
-        isClosed: true,
-      );
+class _GatePageState extends State<GatePage> {
+  int? _gateId;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      final args = ModalRoute.of(context)!.settings.arguments;
+      if (args is Gate) {
+        _gateId = args.id;
+      } else if (args is int) {
+        _gateId = args;
+      }
     }
+  }
+
+  Gate _resolveGate(AppStateData state, Object? routeArgs) {
+    if (_gateId != null) {
+      final found = state.gateById(_gateId!);
+      if (found != null) return found;
+    }
+    if (routeArgs is Gate) return routeArgs;
+    return const Gate(
+      name: 'Porteira',
+      limitTimeStart: '00:00',
+      limitTimeEnd: '00:00',
+      isClosed: true,
+    );
+  }
+
+  void _handleAction(BuildContext context, bool close, int? gateId) {
+    if (gateId == null) return;
+    AppState.of(context).toggleGate(gateId, close);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppState.of(context);
+    final routeArgs = ModalRoute.of(context)?.settings.arguments;
+    final gate = _resolveGate(state, routeArgs);
+    final lastEvent =
+        gate.id != null ? state.lastEventForGate(gate.id!) : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -54,9 +88,9 @@ class GatePage extends StatelessWidget {
               const SizedBox(height: 10),
               _buildStatusSection(gate),
               const SizedBox(height: 15),
-              _buildActivityCard(gate),
+              _buildActivityCard(lastEvent),
               const SizedBox(height: 15),
-              _buildActionButtons(),
+              _buildActionButtons(context, gate),
               const SizedBox(height: 15),
               _buildHistoryButton(context, gate),
               const SizedBox(height: 20),
@@ -70,132 +104,156 @@ class GatePage extends StatelessWidget {
   Widget _buildStatusSection(Gate gate) {
     final statusColor =
         gate.isClosed ? const Color(0xFF4CAF50) : const Color(0xFFD32F2F);
-    final statusText = gate.isClosed ? "FECHADA" : "ABERTA";
+    final statusText = gate.isClosed ? 'FECHADA' : 'ABERTA';
 
-    return Column(
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 350),
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: Column(
+        key: ValueKey(gate.isClosed),
+        children: [
+          Text(
+            'STATUS DA PORTEIRA',
+            style: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 15),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 350),
+            width: 180,
+            height: 180,
+            decoration: BoxDecoration(
+              color: statusColor,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: statusColor.withValues(alpha: 0.35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Icon(
+              gate.isClosed ? Icons.lock_outline : Icons.lock_open,
+              color: Colors.white,
+              size: 90,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            statusText,
+            style: TextStyle(
+              color: statusColor,
+              fontSize: 34,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivityCard(DayEvent? lastEvent) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Última atividade:',
+              style: TextStyle(fontSize: 16, color: Colors.black87),
+            ),
+            const SizedBox(height: 4),
+            _buildActivityContent(lastEvent),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActivityContent(DayEvent? lastEvent) {
+    if (lastEvent == null) {
+      return const Text(
+        'Nenhuma atividade registrada',
+        style: TextStyle(
+          fontSize: 16,
+          color: Colors.black38,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
+    final colors = EventColors.forType(lastEvent.type);
+
+    return Row(
       children: [
-        Text(
-          "STATUS DA PORTEIRA",
-          style: TextStyle(
-            color: statusColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            letterSpacing: 1.1,
-          ),
-        ),
-        const SizedBox(height: 15),
         Container(
-          width: 180,
-          height: 180,
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: statusColor,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            color: colors.iconBg.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            gate.isClosed ? Icons.lock_outline : Icons.lock_open,
-            color: Colors.white,
-            size: 90,
-          ),
+          child: Icon(lastEvent.icon, color: colors.iconBg, size: 20),
         ),
-        const SizedBox(height: 10),
-        Text(
-          statusText,
-          style: TextStyle(
-            color: statusColor,
-            fontSize: 34,
-            fontWeight: FontWeight.bold,
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: const TextStyle(fontSize: 15, color: Colors.black87),
+              children: [
+                TextSpan(
+                  text: lastEvent.time,
+                  style: TextStyle(
+                    color: colors.timeColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextSpan(text: '  ${lastEvent.title}'),
+                TextSpan(
+                  text: '\n${lastEvent.subtitle}',
+                  style:
+                      TextStyle(fontSize: 12, color: colors.subtitleColor),
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildActivityCard(Gate gate) {
-    final hasActivity =
-        gate.lastActivity != null || gate.lastActivityDescription != null;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Última atividade:",
-            style: TextStyle(fontSize: 16, color: Colors.black87),
-          ),
-          const SizedBox(height: 2),
-          if (!hasActivity)
-            const Text(
-              "Nenhuma atividade registrada",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.black38,
-                fontStyle: FontStyle.italic,
-              ),
-            )
-          else
-            RichText(
-              text: TextSpan(
-                style: const TextStyle(fontSize: 18, color: Colors.black),
-                children: [
-                  if (gate.lastActivity != null)
-                    TextSpan(
-                      text:
-                          "${gate.lastActivity!.hour.toString().padLeft(2, '0')}:${gate.lastActivity!.minute.toString().padLeft(2, '0')}",
-                      style: const TextStyle(
-                        color: Color(0xFF2E7D32),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  if (gate.lastActivityDescription != null)
-                    TextSpan(
-                      text: gate.lastActivity != null
-                          ? " - ${gate.lastActivityDescription}"
-                          : gate.lastActivityDescription,
-                    ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons(BuildContext context, Gate gate) {
     return Row(
       children: [
         Expanded(
           child: ActionButton(
-            label: "ABRIR",
-            icon: Icons.unarchive_outlined,
-            color: const Color(0xFF4CAF50),
-            onTap: () {
-              // TODO: Implementar abertura da porteira
-            },
+            label: 'ABRIR',
+            icon: Icons.lock_open_outlined,
+            color: const Color(0xFFD32F2F),
+            onTap: gate.isClosed ? () => _handleAction(context, false, gate.id) : () {},
           ),
         ),
         const SizedBox(width: 15),
         Expanded(
           child: ActionButton(
-            label: "FECHAR",
-            icon: Icons.lock_person_outlined,
-            color: const Color(0xFFD32F2F),
-            onTap: () {
-              // TODO: Implementar fechamento da porteira
-            },
+            label: 'FECHAR',
+            icon: Icons.lock_outlined,
+            color: const Color(0xFF4CAF50),
+            onTap: !gate.isClosed ? () => _handleAction(context, true, gate.id) : () {},
           ),
         ),
       ],
@@ -204,7 +262,8 @@ class GatePage extends StatelessWidget {
 
   Widget _buildHistoryButton(BuildContext context, Gate gate) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/history', arguments: gate.id),
+      onTap: () =>
+          Navigator.pushNamed(context, '/history', arguments: gate.id),
       child: Container(
         width: double.infinity,
         height: 60,
@@ -219,7 +278,7 @@ class GatePage extends StatelessWidget {
             Icon(Icons.history, color: Color(0xFF1976D2), size: 28),
             SizedBox(width: 10),
             Text(
-              "HISTÓRICO",
+              'HISTÓRICO',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
