@@ -7,20 +7,17 @@ class GatePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Pode receber Gate completo ou apenas o nome
     final args = ModalRoute.of(context)!.settings.arguments;
     final Gate gate;
 
     if (args is Gate) {
       gate = args;
     } else {
-      // Fallback para nome simples (compatibilidade)
       gate = Gate(
         name: args as String? ?? "Porteira",
-        limitTimeStart: "6:00",
-        limitTimeEnd: "23:00",
+        limitTimeStart: "00:00",
+        limitTimeEnd: "00:00",
         isClosed: true,
-        lastActivityDescription: "Fechada corretamente",
       );
     }
 
@@ -71,9 +68,8 @@ class GatePage extends StatelessWidget {
   }
 
   Widget _buildStatusSection(Gate gate) {
-    final statusColor = gate.isClosed
-        ? const Color(0xFF4CAF50)
-        : const Color(0xFFD32F2F);
+    final statusColor =
+        gate.isClosed ? const Color(0xFF4CAF50) : const Color(0xFFD32F2F);
     final statusText = gate.isClosed ? "FECHADA" : "ABERTA";
 
     return Column(
@@ -122,6 +118,9 @@ class GatePage extends StatelessWidget {
   }
 
   Widget _buildActivityCard(Gate gate) {
+    final hasActivity =
+        gate.lastActivity != null || gate.lastActivityDescription != null;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -138,23 +137,38 @@ class GatePage extends StatelessWidget {
             style: TextStyle(fontSize: 16, color: Colors.black87),
           ),
           const SizedBox(height: 2),
-          RichText(
-            text: TextSpan(
-              style: const TextStyle(fontSize: 18, color: Colors.black),
-              children: [
-                const TextSpan(
-                  text: "07:16",
-                  style: TextStyle(
-                    color: Color(0xFF2E7D32),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                TextSpan(
-                  text: " - ${gate.lastActivityDescription ?? 'Sem atividade'}",
-                ),
-              ],
+          if (!hasActivity)
+            const Text(
+              "Nenhuma atividade registrada",
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.black38,
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          else
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 18, color: Colors.black),
+                children: [
+                  if (gate.lastActivity != null)
+                    TextSpan(
+                      text:
+                          "${gate.lastActivity!.hour.toString().padLeft(2, '0')}:${gate.lastActivity!.minute.toString().padLeft(2, '0')}",
+                      style: const TextStyle(
+                        color: Color(0xFF2E7D32),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  if (gate.lastActivityDescription != null)
+                    TextSpan(
+                      text: gate.lastActivity != null
+                          ? " - ${gate.lastActivityDescription}"
+                          : gate.lastActivityDescription,
+                    ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
-import 'pages/pages.dart';
+import 'pages/main_page.dart';
+import 'pages/history_page.dart';
+import 'pages/details_page.dart';
+import 'pages/day_events_page.dart';
+import 'pages/gate_page.dart';
+import 'pages/calendar_page.dart';
+import 'pages/register_gate_page.dart';
 
 void main() {
   runApp(const SmaarApp());
@@ -14,18 +20,19 @@ class SmaarApp extends StatelessWidget {
       title: 'SMAAR',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4CAF50)),
         useMaterial3: true,
-        fontFamily: 'Roboto',
+        primarySwatch: Colors.blue,
+        fontFamily: 'sans-serif',
       ),
       initialRoute: '/',
       routes: {
         '/': (context) => const MainPage(),
         '/gate': (context) => const GatePage(),
         '/history': (context) => const HistoryPage(),
-        '/dayEvents': (context) => const DayEventsPage(),
         '/calendar': (context) => const CalendarPage(),
+        '/dayEvents': (context) => const DayEventsPage(),
         '/details': (context) => const DetailsPage(),
+        '/registerGate': (context) => const RegisterGatePage(),
       },
     );
   }
