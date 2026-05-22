@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '/app_state.dart';
+import '../app_state.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
 import '../utils/date_utils.dart';
@@ -70,10 +70,10 @@ class _CalendarPageState extends State<CalendarPage> {
     const int minYear = 2000;
     const int maxYear = 2040;
     final years = List.generate(maxYear - minYear + 1, (i) => minYear + i);
-    final initialIndex = years.indexOf(_currentYear).clamp(0, years.length - 1);
-    final scrollController = FixedExtentScrollController(
-      initialItem: initialIndex,
-    );
+    final initialIndex =
+        years.indexOf(_currentYear).clamp(0, years.length - 1);
+    final scrollController =
+        FixedExtentScrollController(initialItem: initialIndex);
     int tempYear = _currentYear;
 
     showModalBottomSheet(
@@ -101,14 +101,11 @@ class _CalendarPageState extends State<CalendarPage> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Selecionar Ano',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
+                  const Text('Selecionar Ano',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87)),
                   const SizedBox(height: 24),
                   SizedBox(
                     height: 220,
@@ -152,8 +149,7 @@ class _CalendarPageState extends State<CalendarPage> {
                         backgroundColor: const Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                            borderRadius: BorderRadius.circular(16)),
                         elevation: 0,
                       ),
                       onPressed: () {
@@ -163,13 +159,9 @@ class _CalendarPageState extends State<CalendarPage> {
                         });
                         Navigator.pop(ctx);
                       },
-                      child: const Text(
-                        'Confirmar',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: const Text('Confirmar',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -198,9 +190,8 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
           backgroundColor: Colors.black87,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -217,7 +208,8 @@ class _CalendarPageState extends State<CalendarPage> {
     }
   }
 
-  int get _daysInMonth => DateTime(_currentYear, _currentMonth + 1, 0).day;
+  int get _daysInMonth =>
+      DateTime(_currentYear, _currentMonth + 1, 0).day;
 
   int get _startOffset {
     final firstDay = DateTime(_currentYear, _currentMonth, 1);
@@ -248,7 +240,8 @@ class _CalendarPageState extends State<CalendarPage> {
               const SizedBox(height: 10),
               _buildWeekdayHeaders(),
               const SizedBox(height: 6),
-              Expanded(flex: 5, child: _buildCalendarGrid(context, logs)),
+              Expanded(
+                  flex: 5, child: _buildCalendarGrid(context, logs)),
               const SizedBox(height: 10),
               const LegendContainer(),
               const SizedBox(height: 12),
@@ -281,11 +274,8 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(
-                Icons.arrow_drop_down,
-                color: Color(0xFF4CAF50),
-                size: 28,
-              ),
+              const Icon(Icons.arrow_drop_down,
+                  color: Color(0xFF4CAF50), size: 28),
             ],
           ),
         ),
@@ -302,25 +292,21 @@ class _CalendarPageState extends State<CalendarPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: days
-          .map(
-            (d) => SizedBox(
-              width: 40,
-              child: Text(
-                d,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black54,
-                ),
-              ),
-            ),
-          )
+          .map((d) => SizedBox(
+                width: 40,
+                child: Text(d,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black54)),
+              ))
           .toList(),
     );
   }
 
-  Widget _buildCalendarGrid(BuildContext context, Map<String, DayLog> logs) {
+  Widget _buildCalendarGrid(
+      BuildContext context, Map<String, DayLog> logs) {
     final offset = _startOffset;
     final totalDays = _daysInMonth;
     final totalRows = ((offset + totalDays) / 7).ceil();

@@ -10,6 +10,8 @@ import 'pages/day_events_page.dart';
 import 'pages/gate_page.dart';
 import 'pages/calendar_page.dart';
 import 'pages/register_gate_page.dart';
+import 'pages/login_page.dart';
+import 'pages/register_user_page.dart';
 
 void main() {
   runApp(const SmaarApp());
@@ -29,11 +31,9 @@ class _SmaarAppState extends State<SmaarApp> {
   void initState() {
     super.initState();
 
-    // Copia dados dos repositórios mock para a memória mutável do AppState
     final eventRepo = MockEventRepository();
-    final logRepo = MockLogRepository();
+    final logRepo   = MockLogRepository();
 
-    // Porteiras iniciais
     final gates = <Gate>[
       Gate(
         id: 1,
@@ -58,13 +58,11 @@ class _SmaarAppState extends State<SmaarApp> {
       ),
     ];
 
-    // Eventos mock copiados diretamente do repositório (acesso via campo interno)
-    final events = eventRepo.rawByGate;
-
-    // Logs mock copiados do repositório
-    final logs = logRepo.rawByGate;
-
-    _state = AppStateData(gates: gates, events: events, logs: logs);
+    _state = AppStateData(
+      gates:  gates,
+      events: eventRepo.rawByGate,
+      logs:   logRepo.rawByGate,
+    );
   }
 
   @override
@@ -79,17 +77,43 @@ class _SmaarAppState extends State<SmaarApp> {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           fontFamily: 'sans-serif',
         ),
-        initialRoute: '/',
+        // O app sempre abre na tela de login
+        initialRoute: '/login',
         routes: {
-          '/': (context) => const MainPage(),
-          '/gate': (context) => const GatePage(),
-          '/history': (context) => const HistoryPage(),
-          '/calendar': (context) => const CalendarPage(),
-          '/dayEvents': (context) => const DayEventsPage(),
-          '/details': (context) => const DetailsPage(),
-          '/registerGate': (context) => const RegisterGatePage(),
+          '/login':        (context) => const LoginPage(),
+          '/register':     (context) => const RegisterUserPage(),
+          '/':             (context) => const _AuthGuard(child: MainPage()),
+          '/gate':         (context) => const _AuthGuard(child: GatePage()),
+          '/history':      (context) => const _AuthGuard(child: HistoryPage()),
+          '/calendar':     (context) => const _AuthGuard(child: CalendarPage()),
+          '/dayEvents':    (context) => const _AuthGuard(child: DayEventsPage()),
+          '/details':      (context) => const _AuthGuard(child: DetailsPage()),
+          '/registerGate': (context) => const _AuthGuard(child: RegisterGatePage()),
         },
       ),
     );
+  }
+}
+
+/// Guarda de rota: redireciona para /login se não houver sessão ativa.
+/// Envolve qualquer página que exija autenticação.
+class _AuthGuard extends StatelessWidget {
+  final Widget child;
+  const _AuthGuard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final isLoggedIn = AppState.of(context).isLoggedIn;
+    if (!isLoggedIn) {
+      // Agenda o redirecionamento após o frame atual para evitar erros de build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (_) => false,
+        );
+      });
+      return const SizedBox.shrink();
+    }
+    return child;
   }
 }

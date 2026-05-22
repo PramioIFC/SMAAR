@@ -7,11 +7,43 @@ import 'register_gate_page.dart';
 class MainPage extends StatelessWidget {
   const MainPage({super.key});
 
+  Future<void> _logout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Sair da conta'),
+        content: const Text('Deseja encerrar sua sessão?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar',
+                style: TextStyle(color: Color(0xFF757575))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sair',
+                style: TextStyle(
+                    color: Color(0xFFE53935), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      AppState.of(context).logout();
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Lê o AppState — rebuilda automaticamente quando notifyListeners() é chamado
     final state = AppState.of(context);
     final gates = state.gates;
+    final userName = state.currentUser?.name ?? 'Usuário';
+    // Capitaliza apenas a primeira letra
+    final displayName =
+        userName.isEmpty ? 'Usuário' : userName[0].toUpperCase() + userName.substring(1);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -21,34 +53,49 @@ class MainPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const SizedBox(height: 16),
+              // ── Barra superior ──────────────────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'tela principal',
+                    'Minhas Porteiras',
                     style: TextStyle(color: Colors.grey, fontSize: 16),
                   ),
-                  Row(
-                    children: [
-                      const Icon(Icons.logout, color: Colors.black87),
-                      const SizedBox(width: 20),
-                      CircleAvatar(
-                        backgroundColor: Colors.grey[300],
-                        child: const Icon(
-                          Icons.person_outline,
-                          color: Colors.black,
-                        ),
+                  GestureDetector(
+                    onTap: () => _logout(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFEBEE),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    ],
+                      child: const Row(
+                        children: [
+                          Icon(Icons.logout_rounded,
+                              color: Color(0xFFE53935), size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Sair',
+                            style: TextStyle(
+                              color: Color(0xFFE53935),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
 
-              const Text(
-                'Olá, Usuário 1',
-                style: TextStyle(
+              Text(
+                'Olá, $displayName',
+                style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.5,

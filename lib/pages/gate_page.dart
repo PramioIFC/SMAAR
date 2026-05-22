@@ -239,21 +239,35 @@ class _GatePageState extends State<GatePage> {
   Widget _buildActionButtons(BuildContext context, Gate gate) {
     return Row(
       children: [
+        // ABRIR: vermelho (inseguro), ativo só quando porteira está fechada
         Expanded(
-          child: ActionButton(
-            label: 'ABRIR',
-            icon: Icons.lock_open_outlined,
-            color: const Color(0xFFD32F2F),
-            onTap: gate.isClosed ? () => _handleAction(context, false, gate.id) : () {},
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 300),
+            opacity: gate.isClosed ? 1.0 : 0.35,
+            child: ActionButton(
+              label: 'ABRIR',
+              icon: Icons.lock_open_outlined,
+              color: const Color(0xFFD32F2F),
+              onTap: gate.isClosed
+                  ? () => _handleAction(context, false, gate.id)
+                  : () {},
+            ),
           ),
         ),
         const SizedBox(width: 15),
+        // FECHAR: verde (seguro), ativo só quando porteira está aberta
         Expanded(
-          child: ActionButton(
-            label: 'FECHAR',
-            icon: Icons.lock_outlined,
-            color: const Color(0xFF4CAF50),
-            onTap: !gate.isClosed ? () => _handleAction(context, true, gate.id) : () {},
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 300),
+            opacity: !gate.isClosed ? 1.0 : 0.35,
+            child: ActionButton(
+              label: 'FECHAR',
+              icon: Icons.lock_outlined,
+              color: const Color(0xFF4CAF50),
+              onTap: !gate.isClosed
+                  ? () => _handleAction(context, true, gate.id)
+                  : () {},
+            ),
           ),
         ),
       ],

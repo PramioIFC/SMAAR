@@ -2,41 +2,66 @@ import 'package:flutter/material.dart';
 import 'models/models.dart';
 import 'utils/date_utils.dart';
 
-/// Estado global do app — porteiras + eventos + logs, todos mutáveis em memória.
-/// Use AppState.of(context) para ler e AppState.update(context, ...) para escrever.
+/// Estado global do app — sessão do usuário + porteiras + eventos + logs.
+/// Use AppState.of(context) para ler e notifyListeners() para escrever.
 class AppStateData extends ChangeNotifier {
-  // ── Porteiras ──────────────────────────────────────────────────────────────
-  // Lista privada — acesso externo via getter imutável para evitar mutação acidental
-  final List<Gate> _gates;
+  // ── Sessão ─────────────────────────────────────────────────────────────────
 
-  /// Visão somente-leitura da lista de porteiras.
-  List<Gate> get gates => List.unmodifiable(_gates);
+  User? _currentUser;
+
+  /// Usuário autenticado no momento. Null quando não há sessão.
+  User? get currentUser => _currentUser;
+
+  bool get isLoggedIn => _currentUser != null;
+
+  /// Inicia sessão com o usuário retornado pelo AuthRepository.
+  void login(User user) {
+    _currentUser = user;
+    notifyListeners();
+  }
+
+  /// Encerra a sessão e limpa o estado da tela principal.
+  void logout() {
+    _currentUser = null;
+    notifyListeners();
+  }
+
+  // ── Porteiras ──────────────────────────────────────────────────────────────
+
+  final List<Gate> _allGates;
+
+  /// Porteiras visíveis para o usuário logado.
+  /// Admin vê [1, 2, 3]; outros usuários veem apenas suas próprias porteiras.
+  List<Gate> get gates {
+    final owned = _currentUser?.ownedGateIds ?? [];
+    if (owned.isEmpty) return const [];
+    return List.unmodifiable(
+      _allGates.where((g) => owned.contains(g.id)).toList(),
+    );
+  }
 
   // ── Eventos por porteira e data ────────────────────────────────────────────
-  // Estrutura: { gateId: { dateKey: [DayEvent, ...] } }
   final Map<int, Map<String, List<DayEvent>>> _events;
 
-  // ── Logs do calendário por porteira ────────────────────────────────────────
-  // Estrutura: { gateId: [DayLog, ...] }
+  // ── Logs do calendário por porteira ───────────────────────────────────────
   final Map<int, List<DayLog>> _logs;
 
-  // Contadores para IDs novos — iniciam acima do maior ID mock (max ~316/36)
   int _nextEventId = 2000;
-  int _nextLogId = 1000;
+  int _nextLogId   = 1000;
 
   AppStateData({
     required List<Gate> gates,
     required Map<int, Map<String, List<DayEvent>>> events,
     required Map<int, List<DayLog>> logs,
-  })  : _gates = gates,
-        _events = events,
-        _logs = logs;
+  })  : _allGates = gates,
+        _events   = events,
+        _logs     = logs;
 
   // ── Leitura ────────────────────────────────────────────────────────────────
 
   Gate? gateById(int id) {
     try {
-      return _gates.firstWhere((g) => g.id == id);
+      return _allGates.firstWhere((g) => g.id == id);
     } catch (_) {
       return null;
     }
@@ -75,7 +100,6 @@ class AppStateData extends ChangeNotifier {
     final gateMap = _events[gateId];
     if (gateMap == null || gateMap.isEmpty) return null;
 
-    // Percorre as chaves ordenadas desc e retorna o último evento do dia mais recente
     final sortedKeys = gateMap.keys.toList()..sort((a, b) => b.compareTo(a));
     for (final key in sortedKeys) {
       final list = gateMap[key];
@@ -86,21 +110,18 @@ class AppStateData extends ChangeNotifier {
 
   // ── Mutação ────────────────────────────────────────────────────────────────
 
-  /// Alterna o estado da porteira e registra o evento + log correspondente.
   void toggleGate(int gateId, bool close) {
-    final idx = _gates.indexWhere((g) => g.id == gateId);
+    final idx = _allGates.indexWhere((g) => g.id == gateId);
     if (idx == -1) return;
 
-    final now = DateTime.now();
-    final timeStr =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final now     = DateTime.now();
+    final timeStr = '${now.hour.toString().padLeft(2, '0')}:'
+        '${now.minute.toString().padLeft(2, '0')}';
     final dateOnly = DateTime(now.year, now.month, now.day);
-    final dateKey = DateHelper.dateToKey(dateOnly);
+    final dateKey  = DateHelper.dateToKey(dateOnly);
 
-    // 1. Atualiza porteira
-    _gates[idx] = _gates[idx].copyWith(isClosed: close);
+    _allGates[idx] = _allGates[idx].copyWith(isClosed: close);
 
-    // 2. Insere evento
     final newEvent = DayEvent(
       id: _nextEventId++,
       gateId: gateId,
@@ -118,9 +139,8 @@ class AppStateData extends ChangeNotifier {
     _events[gateId]!.putIfAbsent(dateKey, () => []);
     _events[gateId]![dateKey]!.add(newEvent);
 
-    // 3. Upsert do log do dia (garante que hoje aparece no calendário)
     _logs.putIfAbsent(gateId, () => []);
-    final logList = _logs[gateId]!;
+    final logList    = _logs[gateId]!;
     final existingIdx = logList.indexWhere((l) => l.dateKey == dateKey);
     final newLog = DayLog(
       id: existingIdx == -1 ? _nextLogId++ : logList[existingIdx].id,
@@ -138,9 +158,17 @@ class AppStateData extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Adiciona nova porteira (vinda do RegisterGatePage).
   void addGate(Gate gate) {
-    _gates.add(gate);
+    _allGates.add(gate);
+
+    // Vincula o id da nova porteira ao usuário logado para que
+    // o getter `gates` (que filtra por ownedGateIds) a exiba
+    if (_currentUser != null && gate.id != null) {
+      _currentUser = _currentUser!.copyWith(
+        ownedGateIds: [..._currentUser!.ownedGateIds, gate.id!],
+      );
+    }
+
     notifyListeners();
   }
 }
