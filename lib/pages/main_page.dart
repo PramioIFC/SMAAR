@@ -142,7 +142,7 @@ class MainPage extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const RegisterGatePage()),
           );
           if (result != null && context.mounted) {
-            AppState.of(context).addGate(result);
+            await AppState.of(context).addGate(result);
           }
         },
         backgroundColor: const Color(0xFF4CAF50),

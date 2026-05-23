@@ -106,7 +106,8 @@ class _RegisterUserPageState extends State<RegisterUserPage> {
 
     if (result.isSuccess) {
       // Registra a sessão antes de navegar — sem isso o AuthGuard bloquearia a rota '/'
-      AppState.of(context).login(result.user!);
+      await AppState.of(context).login(result.user!);
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/');
     } else {
       setState(() => _errorMessage = result.message);

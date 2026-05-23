@@ -1,44 +1,54 @@
 import 'package:flutter/material.dart';
 import 'models/models.dart';
 import 'utils/date_utils.dart';
+import 'repositories/repositories/gate_repository.dart';
 
 /// Estado global do app — sessão do usuário + porteiras + eventos + logs.
-/// Use AppState.of(context) para ler e notifyListeners() para escrever.
+///
+/// Usa [GateRepository] para persistência das porteiras.
+/// Hoje: MockGateRepository (memória).
+/// Depois: troque por PostgresGateRepository sem mudar este arquivo.
 class AppStateData extends ChangeNotifier {
+  // ── Repositório de porteiras ───────────────────────────────────────────────
+  final GateRepository _gateRepo;
+
   // ── Sessão ─────────────────────────────────────────────────────────────────
-
   User? _currentUser;
-
-  /// Usuário autenticado no momento. Null quando não há sessão.
   User? get currentUser => _currentUser;
-
   bool get isLoggedIn => _currentUser != null;
 
-  /// Inicia sessão com o usuário retornado pelo AuthRepository.
-  void login(User user) {
+  /// Inicia sessão: carrega as porteiras do usuário do repositório.
+  Future<void> login(User user) async {
     _currentUser = user;
+
+    // Busca as porteiras do usuário no repositório.
+    // Guarda com null-check seguro — id só será null se o repositório
+    // retornar um usuário sem id (não acontece no mock nem no PostgreSQL
+    // com SERIAL, mas protege contra regressões futuras).
+    // PostgreSQL: SELECT * FROM gates WHERE owner_id = @userId
+    if (user.id != null) {
+      final gates = await _gateRepo.getGatesForUser(user.id!);
+      _allGates
+        ..clear()
+        ..addAll(gates);
+    }
+
     notifyListeners();
   }
 
-  /// Encerra a sessão e limpa o estado da tela principal.
+  /// Encerra a sessão e limpa todas as porteiras da memória.
   void logout() {
     _currentUser = null;
+    _allGates.clear();
     notifyListeners();
   }
 
   // ── Porteiras ──────────────────────────────────────────────────────────────
 
-  final List<Gate> _allGates;
+  final List<Gate> _allGates = [];
 
-  /// Porteiras visíveis para o usuário logado.
-  /// Admin vê [1, 2, 3]; outros usuários veem apenas suas próprias porteiras.
-  List<Gate> get gates {
-    final owned = _currentUser?.ownedGateIds ?? [];
-    if (owned.isEmpty) return const [];
-    return List.unmodifiable(
-      _allGates.where((g) => owned.contains(g.id)).toList(),
-    );
-  }
+  /// Porteiras do usuário logado (já filtradas pelo login).
+  List<Gate> get gates => List.unmodifiable(_allGates);
 
   // ── Eventos por porteira e data ────────────────────────────────────────────
   final Map<int, Map<String, List<DayEvent>>> _events;
@@ -50,10 +60,10 @@ class AppStateData extends ChangeNotifier {
   int _nextLogId   = 1000;
 
   AppStateData({
-    required List<Gate> gates,
+    required GateRepository gateRepo,
     required Map<int, Map<String, List<DayEvent>>> events,
     required Map<int, List<DayLog>> logs,
-  })  : _allGates = gates,
+  })  : _gateRepo = gateRepo,
         _events   = events,
         _logs     = logs;
 
@@ -110,17 +120,26 @@ class AppStateData extends ChangeNotifier {
 
   // ── Mutação ────────────────────────────────────────────────────────────────
 
+  /// Alterna o status de uma porteira e registra o evento/log.
+  ///
+  /// Chama [GateRepository.updateGateStatus] para persistir.
+  /// PostgreSQL: UPDATE gates SET is_closed = @isClosed WHERE id = @id
   void toggleGate(int gateId, bool close) {
     final idx = _allGates.indexWhere((g) => g.id == gateId);
     if (idx == -1) return;
 
-    final now     = DateTime.now();
-    final timeStr = '${now.hour.toString().padLeft(2, '0')}:'
+    final now      = DateTime.now();
+    final timeStr  = '${now.hour.toString().padLeft(2, '0')}:'
         '${now.minute.toString().padLeft(2, '0')}';
     final dateOnly = DateTime(now.year, now.month, now.day);
     final dateKey  = DateHelper.dateToKey(dateOnly);
 
+    // Atualiza em memória imediatamente (UI não espera o repo)
     _allGates[idx] = _allGates[idx].copyWith(isClosed: close);
+
+    // Persiste no repositório em background
+    // PostgreSQL: UPDATE gates SET is_closed = @isClosed WHERE id = @id
+    _gateRepo.updateGateStatus(gateId, close);
 
     final newEvent = DayEvent(
       id: _nextEventId++,
@@ -140,7 +159,7 @@ class AppStateData extends ChangeNotifier {
     _events[gateId]![dateKey]!.add(newEvent);
 
     _logs.putIfAbsent(gateId, () => []);
-    final logList    = _logs[gateId]!;
+    final logList     = _logs[gateId]!;
     final existingIdx = logList.indexWhere((l) => l.dateKey == dateKey);
     final newLog = DayLog(
       id: existingIdx == -1 ? _nextLogId++ : logList[existingIdx].id,
@@ -158,17 +177,21 @@ class AppStateData extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addGate(Gate gate) {
-    _allGates.add(gate);
+  /// Cadastra uma nova porteira, persiste no repositório e vincula ao usuário.
+  ///
+  /// PostgreSQL:
+  ///   INSERT INTO gates (..., owner_id) VALUES (..., @userId) RETURNING *;
+  Future<void> addGate(Gate gate) async {
+    if (_currentUser?.id == null) return;
 
-    // Vincula o id da nova porteira ao usuário logado para que
-    // o getter `gates` (que filtra por ownedGateIds) a exiba
-    if (_currentUser != null && gate.id != null) {
-      _currentUser = _currentUser!.copyWith(
-        ownedGateIds: [..._currentUser!.ownedGateIds, gate.id!],
-      );
-    }
+    // Persiste e obtém o gate com id atribuído pelo repositório
+    // (mock: id gerado localmente; PostgreSQL: id gerado pelo SERIAL)
+    final persisted = await _gateRepo.createGate(
+      gate,
+      ownerId: _currentUser!.id!,
+    );
 
+    _allGates.add(persisted);
     notifyListeners();
   }
 }

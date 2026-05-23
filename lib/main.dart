@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'app_state.dart';
-import 'models/models.dart';
 import 'repositories/repositories/event_repository.dart';
 import 'repositories/repositories/log_repository.dart';
+import 'repositories/repositories/gate_repository.dart';
 import 'pages/main_page.dart';
 import 'pages/history_page.dart';
 import 'pages/details_page.dart';
@@ -31,37 +31,24 @@ class _SmaarAppState extends State<SmaarApp> {
   void initState() {
     super.initState();
 
+    // ── Repositórios ────────────────────────────────────────────────────────
+    //
+    // Para trocar para PostgreSQL quando o banco estiver pronto,
+    // basta substituir cada Mock por sua implementação real:
+    //
+    //   MockGateRepository()   → PostgresGateRepository(dbConnection)
+    //   MockEventRepository()  → PostgresEventRepository(dbConnection)
+    //   MockLogRepository()    → PostgresLogRepository(dbConnection)
+    //
+    // O resto do app não precisa mudar.
+    final gateRepo  = MockGateRepository();
     final eventRepo = MockEventRepository();
     final logRepo   = MockLogRepository();
 
-    final gates = <Gate>[
-      Gate(
-        id: 1,
-        name: 'Porteira 1',
-        limitTimeStart: '06:00',
-        limitTimeEnd: '23:00',
-        isClosed: true,
-      ),
-      Gate(
-        id: 2,
-        name: 'Porteira 2',
-        limitTimeStart: '09:00',
-        limitTimeEnd: '22:00',
-        isClosed: false,
-      ),
-      Gate(
-        id: 3,
-        name: 'Porteira 3',
-        limitTimeStart: '09:00',
-        limitTimeEnd: '22:00',
-        isClosed: true,
-      ),
-    ];
-
     _state = AppStateData(
-      gates:  gates,
-      events: eventRepo.rawByGate,
-      logs:   logRepo.rawByGate,
+      gateRepo: gateRepo,
+      events:   eventRepo.rawByGate,
+      logs:     logRepo.rawByGate,
     );
   }
 
@@ -77,7 +64,6 @@ class _SmaarAppState extends State<SmaarApp> {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           fontFamily: 'sans-serif',
         ),
-        // O app sempre abre na tela de login
         initialRoute: '/login',
         routes: {
           '/login':        (context) => const LoginPage(),
@@ -96,7 +82,6 @@ class _SmaarAppState extends State<SmaarApp> {
 }
 
 /// Guarda de rota: redireciona para /login se não houver sessão ativa.
-/// Envolve qualquer página que exija autenticação.
 class _AuthGuard extends StatelessWidget {
   final Widget child;
   const _AuthGuard({required this.child});
@@ -105,7 +90,6 @@ class _AuthGuard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLoggedIn = AppState.of(context).isLoggedIn;
     if (!isLoggedIn) {
-      // Agenda o redirecionamento após o frame atual para evitar erros de build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.of(context).pushNamedAndRemoveUntil(
           '/login',

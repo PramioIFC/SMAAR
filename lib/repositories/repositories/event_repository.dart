@@ -1,5 +1,5 @@
-import '/models/models.dart';
-import '/utils/date_utils.dart';
+import '../../models/models.dart';
+import '../../utils/date_utils.dart';
 
 abstract class EventRepository {
   Future<List<DayEvent>> getEventsForDate(DateTime date);

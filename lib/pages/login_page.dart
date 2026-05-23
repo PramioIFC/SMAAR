@@ -44,7 +44,8 @@ class _LoginPageState extends State<LoginPage> {
 
     if (result.isSuccess) {
       // Registra o usuário no estado global antes de navegar
-      AppState.of(context).login(result.user!);
+      await AppState.of(context).login(result.user!);
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/');
     } else {
       setState(() => _errorMessage = result.message);

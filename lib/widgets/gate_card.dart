@@ -26,7 +26,7 @@ class GateCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -77,7 +77,7 @@ class GateCard extends StatelessWidget {
               children: [
                 Icon(
                   gate.isClosed ? Icons.lock : Icons.lock_open,
-                  color: gate.isClosed ? Colors.teal : Colors.redAccent,
+                  color: gate.isClosed ? const Color(0xFF4CAF50) : Colors.redAccent,
                   size: 35,
                 ),
                 const SizedBox(width: 10),

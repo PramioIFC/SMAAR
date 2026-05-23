@@ -100,7 +100,7 @@ class HistoryCard extends StatelessWidget {
                       subtitle!,
                       style: TextStyle(
                         fontSize: 16,
-                        color: contentColor.withOpacity(0.8),
+                        color: contentColor.withValues(alpha: 0.8),
                       ),
                     ),
                   ],

@@ -1,4 +1,4 @@
-import '/models/models.dart';
+import '../../models/models.dart';
 
 /// Função de hash mock — retorna 'mock_hash_<senha>'.
 /// Substituir por bcrypt/argon2 na integração com PostgreSQL.
