@@ -1,4 +1,57 @@
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../models/models.dart';
+import '../../dao/usuario_dao.dart';
+
+class ApiAuthRepository implements AuthRepository {
+  final UsuarioDao _dao = UsuarioDao();
+  final _storage = const FlutterSecureStorage();
+
+  @override
+  Future<AuthResult> login(String name, String password) async {
+    try {
+      final response = await _dao.login(name, password);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200) {
+        await _storage.write(key: 'access_token', value: data['access']);
+        await _storage.write(key: 'refresh_token', value: data['refresh']);
+
+        final user = User(id: data['id'] as int?, name: data['username'] as String);
+        return AuthResult(status: AuthStatus.success, user: user);
+      }
+
+      if (response.statusCode == 401) {
+        return const AuthResult(status: AuthStatus.invalidCredentials);
+      }
+
+      return const AuthResult(status: AuthStatus.unknownError);
+    } catch (_) {
+      return const AuthResult(status: AuthStatus.unknownError);
+    }
+  }
+
+  @override
+  Future<AuthResult> register(String name, String password) async {
+    try {
+      final response = await _dao.registrar(name, password);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 201) {
+        final user = User(id: data['id'] as int?, name: data['username'] as String);
+        return AuthResult(status: AuthStatus.success, user: user);
+      }
+
+      if (response.statusCode == 400 && data['erro'] == 'Usuário já existe') {
+        return const AuthResult(status: AuthStatus.userAlreadyExists);
+      }
+
+      return const AuthResult(status: AuthStatus.unknownError);
+    } catch (_) {
+      return const AuthResult(status: AuthStatus.unknownError);
+    }
+  }
+}
 
 /// Função de hash mock — retorna 'mock_hash_<senha>'.
 /// Substituir por bcrypt/argon2 na integração com PostgreSQL.

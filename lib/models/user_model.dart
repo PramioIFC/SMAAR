@@ -1,30 +1,23 @@
-/// Modelo de Usuário
-/// Preparado para integração com PostgreSQL
 class User {
   final int? id;
   final String name;
-  final String passwordHash; // armazenar hash, nunca senha em texto puro
-
-  /// IDs das porteiras que pertencem a este usuário.
-  /// Admin (id=1) começa com [1, 2, 3]; novos usuários começam com [].
+  final String? passwordHash; // opcional: só o Mock usa; a API real não expõe hash de senha
   final List<int> ownedGateIds;
-
   final DateTime? createdAt;
 
   const User({
     this.id,
     required this.name,
-    required this.passwordHash,
+    this.passwordHash,
     this.ownedGateIds = const [],
     this.createdAt,
   });
 
-  /// Cria uma instância a partir de um Map (para PostgreSQL/JSON)
   factory User.fromMap(Map<String, dynamic> map) {
     return User(
       id: map['id'] as int?,
-      name: map['name'] as String,
-      passwordHash: map['password_hash'] as String,
+      name: (map['name'] ?? map['username']) as String,
+      passwordHash: map['password_hash'] as String?,
       ownedGateIds: (map['owned_gate_ids'] as List<dynamic>?)
               ?.map((e) => e as int)
               .toList() ??
@@ -35,18 +28,16 @@ class User {
     );
   }
 
-  /// Converte para Map (para inserção no PostgreSQL)
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
       'name': name,
-      'password_hash': passwordHash,
+      if (passwordHash != null) 'password_hash': passwordHash,
       'owned_gate_ids': ownedGateIds,
       'created_at': createdAt?.toIso8601String(),
     };
   }
 
-  /// Cria uma cópia com valores alterados
   User copyWith({
     int? id,
     String? name,
@@ -67,14 +58,7 @@ class User {
   String toString() => 'User(id: $id, name: $name)';
 }
 
-/// Resultado de uma tentativa de autenticação
-enum AuthStatus {
-  success,
-  invalidCredentials,
-  userNotFound,
-  userAlreadyExists,
-  unknownError,
-}
+enum AuthStatus { success, invalidCredentials, userNotFound, userAlreadyExists, unknownError }
 
 class AuthResult {
   final AuthStatus status;
@@ -84,7 +68,6 @@ class AuthResult {
 
   bool get isSuccess => status == AuthStatus.success;
 
-  /// Mensagem amigável para exibir ao usuário
   String get message => switch (status) {
         AuthStatus.success            => 'Sucesso',
         AuthStatus.invalidCredentials => 'Nome ou senha incorretos',

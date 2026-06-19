@@ -27,7 +27,11 @@ class RegistroView(APIView):
 
         user = User.objects.create_user(username=username, password=password)
         Perfil.objects.create(usuario=user)
-        return Response({'mensagem': 'Usuário criado com sucesso'}, status=status.HTTP_201_CREATED)
+        return Response({
+            'mensagem': 'Usuário criado com sucesso',
+            'id': user.id,
+            'username': user.username,
+        }, status=status.HTTP_201_CREATED)
 
 
 class LoginView(APIView):
@@ -48,5 +52,7 @@ class LoginView(APIView):
                 'mensagem': 'Login realizado com sucesso',
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
+                'id': usuario.id,
+                'username': usuario.username,
             })
         return Response({'erro': 'Usuário ou senha inválidos'}, status=status.HTTP_401_UNAUTHORIZED)
