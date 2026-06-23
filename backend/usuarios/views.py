@@ -1,11 +1,16 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Perfil
 from .serializers import RegistroSerializer, LoginSerializer
+
+
+def _tokens_para(user):
+    refresh = RefreshToken.for_user(user)
+    return {'access': str(refresh.access_token), 'refresh': str(refresh)}
 
 
 class RegistroView(APIView):
@@ -15,8 +20,8 @@ class RegistroView(APIView):
         serializer = RegistroSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        username = serializer.validated_data['username']
-        password = serializer.validated_data['password']
+        username  = serializer.validated_data['username']
+        password  = serializer.validated_data['password']
         confirmar = serializer.validated_data['confirmar_senha']
 
         if password != confirmar:
@@ -27,10 +32,12 @@ class RegistroView(APIView):
 
         user = User.objects.create_user(username=username, password=password)
         Perfil.objects.create(usuario=user)
+
         return Response({
             'mensagem': 'Usuário criado com sucesso',
             'id': user.id,
             'username': user.username,
+            **_tokens_para(user),
         }, status=status.HTTP_201_CREATED)
 
 
@@ -41,18 +48,17 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        username = serializer.validated_data['username']
-        password = serializer.validated_data['password']
-
-        usuario = authenticate(request, username=username, password=password)
+        usuario = authenticate(
+            request,
+            username=serializer.validated_data['username'],
+            password=serializer.validated_data['password'],
+        )
 
         if usuario:
-            refresh = RefreshToken.for_user(usuario)
             return Response({
                 'mensagem': 'Login realizado com sucesso',
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
                 'id': usuario.id,
                 'username': usuario.username,
+                **_tokens_para(usuario),
             })
         return Response({'erro': 'Usuário ou senha inválidos'}, status=status.HTTP_401_UNAUTHORIZED)

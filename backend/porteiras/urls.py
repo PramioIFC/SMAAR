@@ -1,7 +1,6 @@
-from django.urls import path
-from .views import view_abrir, view_fechar
+from rest_framework.routers import DefaultRouter
+from .views import PorteiraViewSet
 
-urlpatterns = [
-    path('porteira/abrir/', view_abrir, name='porteira-abrir'),
-    path('porteira/fechar/', view_fechar, name='porteira-fechar'),
-]
+router = DefaultRouter()
+router.register('porteiras', PorteiraViewSet, basename='porteira')
+urlpatterns = router.urls
