@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class UsuarioDao {
-  static const String baseUrl = 'http://10.0.2.2:8000/api'; // ajuste conforme seu ambiente
+  static const String baseUrl =
+      'http://10.0.2.2:8000/api'; // ajuste conforme seu ambiente
 
   Future<http.Response> registrar(String username, String password) {
     return http.post(
@@ -11,7 +12,8 @@ class UsuarioDao {
       body: jsonEncode({
         'username': username,
         'password': password,
-        'confirmar_senha': password, // confirmação já validada na tela antes de chamar
+        'confirmar_senha':
+            password, // confirmação já validada na tela antes de chamar
       }),
     );
   }

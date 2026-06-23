@@ -61,6 +61,23 @@ class DayEvent {
   }
 
   /// Cria uma instância a partir de um Map (para PostgreSQL/JSON)
+  /// Lê um RegistroPorteira do backend:
+  /// {"id", "porteira", "status": "aberto"|"fechado", "data": "yyyy-MM-dd", "hora": "HH:mm:ss"}
+  factory DayEvent.fromRegistroJson(Map<String, dynamic> json) {
+    final isClosed   = (json['status'] as String) == 'fechado';
+    final horaStr    = (json['hora'] as String).substring(0, 5); // "HH:mm"
+    return DayEvent(
+      id:       json['id']       as int?,
+      gateId:   json['porteira'] as int?,
+      date:     DateTime.parse(json['data'] as String),
+      time:     horaStr,
+      title:    isClosed ? 'Porteira fechada' : 'Porteira aberta',
+      subtitle: isClosed ? 'Fechamento registrado' : 'Abertura registrada',
+      iconName: isClosed ? 'lock' : 'lock_open',
+      type:     isClosed ? EventType.normal : EventType.danger,
+    );
+  }
+
   factory DayEvent.fromMap(Map<String, dynamic> map) {
     return DayEvent(
       id: map['id'] as int?,

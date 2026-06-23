@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'app_state.dart';
-import 'repositories/repositories/event_repository.dart';
-import 'repositories/repositories/log_repository.dart';
 import 'repositories/repositories/gate_repository.dart';
 import 'pages/main_page.dart';
 import 'pages/history_page.dart';
@@ -30,26 +28,9 @@ class _SmaarAppState extends State<SmaarApp> {
   @override
   void initState() {
     super.initState();
-
-    // ── Repositórios ────────────────────────────────────────────────────────
-    //
-    // Para trocar para PostgreSQL quando o banco estiver pronto,
-    // basta substituir cada Mock por sua implementação real:
-    //
-    //   MockGateRepository()   → PostgresGateRepository(dbConnection)
-    //   MockEventRepository()  → PostgresEventRepository(dbConnection)
-    //   MockLogRepository()    → PostgresLogRepository(dbConnection)
-    //
-    // O resto do app não precisa mudar.
-    final gateRepo  = MockGateRepository();
-    final eventRepo = MockEventRepository();
-    final logRepo   = MockLogRepository();
-
-    _state = AppStateData(
-      gateRepo: gateRepo,
-      events:   eventRepo.rawByGate,
-      logs:     logRepo.rawByGate,
-    );
+    // Repositório real — fala com o backend Django via HTTP/JWT.
+    // Para mudar a URL base, edite ApiClient.baseUrl em services/api_client.dart.
+    _state = AppStateData(gateRepo: ApiGateRepository());
   }
 
   @override
@@ -81,20 +62,16 @@ class _SmaarAppState extends State<SmaarApp> {
   }
 }
 
-/// Guarda de rota: redireciona para /login se não houver sessão ativa.
+/// Redireciona para /login se não houver sessão ativa.
 class _AuthGuard extends StatelessWidget {
   final Widget child;
   const _AuthGuard({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final isLoggedIn = AppState.of(context).isLoggedIn;
-    if (!isLoggedIn) {
+    if (!AppState.of(context).isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/login',
-          (_) => false,
-        );
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
       });
       return const SizedBox.shrink();
     }

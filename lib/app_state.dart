@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'models/models.dart';
 import 'utils/date_utils.dart';
 import 'repositories/repositories/gate_repository.dart';
+import 'services/api_client.dart';
 
-/// Estado global do app — sessão do usuário + porteiras + eventos + logs.
+/// Estado global da aplicação.
 ///
-/// Usa [GateRepository] para persistência das porteiras.
-/// Hoje: MockGateRepository (memória).
-/// Depois: troque por PostgresGateRepository sem mudar este arquivo.
+/// Fonte da verdade: backend Django.
+/// Cache em memória para leitura síncrona nas telas —
+/// populado via API no login e atualizado após cada ação.
 class AppStateData extends ChangeNotifier {
-  // ── Repositório de porteiras ───────────────────────────────────────────────
   final GateRepository _gateRepo;
 
   // ── Sessão ─────────────────────────────────────────────────────────────────
@@ -17,72 +17,93 @@ class AppStateData extends ChangeNotifier {
   User? get currentUser => _currentUser;
   bool get isLoggedIn => _currentUser != null;
 
-  /// Inicia sessão: carrega as porteiras do usuário do repositório.
-  Future<void> login(User user) async {
-    _currentUser = user;
+  bool _loadingGates = false;
+  bool get loadingGates => _loadingGates;
 
-    // Busca as porteiras do usuário no repositório.
-    // Guarda com null-check seguro — id só será null se o repositório
-    // retornar um usuário sem id (não acontece no mock nem no PostgreSQL
-    // com SERIAL, mas protege contra regressões futuras).
-    // PostgreSQL: SELECT * FROM gates WHERE owner_id = @userId
-    if (user.id != null) {
-      final gates = await _gateRepo.getGatesForUser(user.id!);
-      _allGates
-        ..clear()
-        ..addAll(gates);
-    }
-
-    notifyListeners();
-  }
-
-  /// Encerra a sessão e limpa todas as porteiras da memória.
-  void logout() {
-    _currentUser = null;
-    _allGates.clear();
-    notifyListeners();
-  }
+  AppStateData({required GateRepository gateRepo}) : _gateRepo = gateRepo;
 
   // ── Porteiras ──────────────────────────────────────────────────────────────
+  final List<Gate> _gates = [];
+  List<Gate> get gates => List.unmodifiable(_gates);
 
-  final List<Gate> _allGates = [];
+  // ── Eventos por porteira × data ────────────────────────────────────────────
+  final Map<int, Map<String, List<DayEvent>>> _events = {};
 
-  /// Porteiras do usuário logado (já filtradas pelo login).
-  List<Gate> get gates => List.unmodifiable(_allGates);
+  // ── Logs de calendário por porteira ───────────────────────────────────────
+  final Map<int, List<DayLog>> _logs = {};
 
-  // ── Eventos por porteira e data ────────────────────────────────────────────
-  final Map<int, Map<String, List<DayEvent>>> _events;
+  // ── Login / Logout ─────────────────────────────────────────────────────────
 
-  // ── Logs do calendário por porteira ───────────────────────────────────────
-  final Map<int, List<DayLog>> _logs;
+  Future<void> login(User user) async {
+    _currentUser = user;
+    notifyListeners();
+    await _reloadAll();
+  }
 
-  int _nextEventId = 2000;
-  int _nextLogId   = 1000;
+  Future<void> logout() async {
+    _currentUser = null;
+    _gates.clear();
+    _events.clear();
+    _logs.clear();
+    await ApiClient().clearTokens();
+    notifyListeners();
+  }
 
-  AppStateData({
-    required GateRepository gateRepo,
-    required Map<int, Map<String, List<DayEvent>>> events,
-    required Map<int, List<DayLog>> logs,
-  })  : _gateRepo = gateRepo,
-        _events   = events,
-        _logs     = logs;
+  // ── Carga completa do backend ──────────────────────────────────────────────
+
+  Future<void> _reloadAll() async {
+    if (_currentUser?.id == null) return;
+    _loadingGates = true;
+    notifyListeners();
+
+    try {
+      final gates = await _gateRepo.getGatesForUser(_currentUser!.id!);
+      _gates..clear()..addAll(gates);
+      _events.clear();
+      _logs.clear();
+
+      for (final gate in gates) {
+        if (gate.id == null) continue;
+        await _loadHistoryForGate(gate.id!);
+      }
+    } finally {
+      _loadingGates = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadHistoryForGate(int gateId) async {
+    // Backend devolve mais recente primeiro; invertemos para cronológico
+    final registros = (await _gateRepo.getRegistrosForGate(gateId)).reversed.toList();
+
+    final byDate = <String, List<DayEvent>>{};
+    for (final e in registros) {
+      byDate.putIfAbsent(DateHelper.dateToKey(e.date), () => []).add(e);
+    }
+    _events[gateId] = byDate;
+
+    _logs[gateId] = byDate.entries.map((entry) {
+      final last     = entry.value.last;
+      final isClosed = last.iconName == 'lock';
+      return DayLog.fromStatusEntry(
+        gateId: gateId,
+        date:   last.date,
+        status: isClosed ? 'fechado' : 'aberto',
+      );
+    }).toList();
+  }
 
   // ── Leitura ────────────────────────────────────────────────────────────────
 
   Gate? gateById(int id) {
-    try {
-      return _allGates.firstWhere((g) => g.id == id);
-    } catch (_) {
-      return null;
-    }
+    try { return _gates.firstWhere((g) => g.id == id); } catch (_) { return null; }
   }
 
   List<DayEvent> eventsForGateAndKey(int gateId, String dateKey) =>
       List.unmodifiable(_events[gateId]?[dateKey] ?? []);
 
-  List<DayEvent> eventsForKey(String dateKey) => _events.values
-      .expand((m) => m[dateKey] ?? <DayEvent>[])
-      .toList();
+  List<DayEvent> eventsForKey(String dateKey) =>
+      _events.values.expand((m) => m[dateKey] ?? <DayEvent>[]).toList();
 
   Map<String, DayLog> logsForGateAndMonth(int gateId, int year, int month) {
     final result = <String, DayLog>{};
@@ -107,12 +128,10 @@ class AppStateData extends ChangeNotifier {
   }
 
   DayEvent? lastEventForGate(int gateId) {
-    final gateMap = _events[gateId];
-    if (gateMap == null || gateMap.isEmpty) return null;
-
-    final sortedKeys = gateMap.keys.toList()..sort((a, b) => b.compareTo(a));
-    for (final key in sortedKeys) {
-      final list = gateMap[key];
+    final map = _events[gateId];
+    if (map == null || map.isEmpty) return null;
+    for (final key in (map.keys.toList()..sort((a, b) => b.compareTo(a)))) {
+      final list = map[key];
       if (list != null && list.isNotEmpty) return list.last;
     }
     return null;
@@ -120,94 +139,65 @@ class AppStateData extends ChangeNotifier {
 
   // ── Mutação ────────────────────────────────────────────────────────────────
 
-  /// Alterna o status de uma porteira e registra o evento/log.
-  ///
-  /// Chama [GateRepository.updateGateStatus] para persistir.
-  /// PostgreSQL: UPDATE gates SET is_closed = @isClosed WHERE id = @id
+  /// Abre/fecha a porteira.
+  /// Atualiza a UI imediatamente (otimista) e confirma com o backend;
+  /// reverte se o servidor recusar.
   void toggleGate(int gateId, bool close) {
-    final idx = _allGates.indexWhere((g) => g.id == gateId);
+    final idx = _gates.indexWhere((g) => g.id == gateId);
     if (idx == -1) return;
 
-    final now      = DateTime.now();
-    final timeStr  = '${now.hour.toString().padLeft(2, '0')}:'
-        '${now.minute.toString().padLeft(2, '0')}';
-    final dateOnly = DateTime(now.year, now.month, now.day);
-    final dateKey  = DateHelper.dateToKey(dateOnly);
-
-    // Atualiza em memória imediatamente (UI não espera o repo)
-    _allGates[idx] = _allGates[idx].copyWith(isClosed: close);
-
-    // Persiste no repositório em background
-    // PostgreSQL: UPDATE gates SET is_closed = @isClosed WHERE id = @id
-    _gateRepo.updateGateStatus(gateId, close);
-
-    final newEvent = DayEvent(
-      id: _nextEventId++,
-      gateId: gateId,
-      date: dateOnly,
-      time: timeStr,
-      title: close ? 'Porteira fechada' : 'Porteira aberta',
-      subtitle: close
-          ? 'Fechamento manual pelo usuário'
-          : 'Abertura manual pelo usuário',
-      iconName: close ? 'lock' : 'lock_open',
-      type: EventType.normal,
-    );
-
-    _events.putIfAbsent(gateId, () => {});
-    _events[gateId]!.putIfAbsent(dateKey, () => []);
-    _events[gateId]![dateKey]!.add(newEvent);
-
-    _logs.putIfAbsent(gateId, () => []);
-    final logList     = _logs[gateId]!;
-    final existingIdx = logList.indexWhere((l) => l.dateKey == dateKey);
-    final newLog = DayLog(
-      id: existingIdx == -1 ? _nextLogId++ : logList[existingIdx].id,
-      gateId: gateId,
-      date: dateOnly,
-      status: LogStatus.normal,
-      description: close ? 'Fechamento manual' : 'Abertura manual',
-    );
-    if (existingIdx == -1) {
-      logList.add(newLog);
-    } else {
-      logList[existingIdx] = newLog;
-    }
-
+    final prev = _gates[idx];
+    _gates[idx] = prev.copyWith(isClosed: close);
     notifyListeners();
+
+    _gateRepo.updateGateStatus(gateId, close).then((registro) {
+      final key = DateHelper.dateToKey(registro.date);
+      _events.putIfAbsent(gateId, () => {})
+             .putIfAbsent(key, () => [])
+             .add(registro);
+
+      final logList = _logs.putIfAbsent(gateId, () => []);
+      final existIdx = logList.indexWhere((l) => l.dateKey == key);
+      final newLog = DayLog.fromStatusEntry(
+        gateId: gateId,
+        date:   registro.date,
+        status: close ? 'fechado' : 'aberto',
+      );
+      if (existIdx == -1) {
+        logList.add(newLog);
+      } else {
+        logList[existIdx] = newLog;
+      }
+      notifyListeners();
+    }).catchError((_) {
+      // Reverte atualização otimista
+      final i = _gates.indexWhere((g) => g.id == gateId);
+      if (i != -1) _gates[i] = prev;
+      notifyListeners();
+    });
   }
 
-  /// Cadastra uma nova porteira, persiste no repositório e vincula ao usuário.
-  ///
-  /// PostgreSQL:
-  ///   INSERT INTO gates (..., owner_id) VALUES (..., @userId) RETURNING *;
+  /// Cadastra nova porteira no backend e adiciona ao cache.
   Future<void> addGate(Gate gate) async {
     if (_currentUser?.id == null) return;
-
-    // Persiste e obtém o gate com id atribuído pelo repositório
-    // (mock: id gerado localmente; PostgreSQL: id gerado pelo SERIAL)
-    final persisted = await _gateRepo.createGate(
-      gate,
-      ownerId: _currentUser!.id!,
-    );
-
-    _allGates.add(persisted);
+    final persisted = await _gateRepo.createGate(gate, ownerId: _currentUser!.id!);
+    _gates.add(persisted);
+    if (persisted.id != null) {
+      _events[persisted.id!] = {};
+      _logs[persisted.id!]   = [];
+    }
     notifyListeners();
   }
 }
 
-// ── InheritedNotifier wrapper ──────────────────────────────────────────────
+// ── InheritedNotifier ─────────────────────────────────────────────────────────
 
 class AppState extends InheritedNotifier<AppStateData> {
-  const AppState({
-    super.key,
-    required AppStateData state,
-    required super.child,
-  }) : super(notifier: state);
+  const AppState({super.key, required AppStateData state, required super.child})
+      : super(notifier: state);
 
   static AppStateData of(BuildContext context) {
-    final inherited =
-        context.dependOnInheritedWidgetOfExactType<AppState>();
+    final inherited = context.dependOnInheritedWidgetOfExactType<AppState>();
     assert(inherited != null, 'AppState não encontrado na árvore de widgets');
     return inherited!.notifier!;
   }

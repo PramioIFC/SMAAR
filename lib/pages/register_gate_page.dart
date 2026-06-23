@@ -63,13 +63,10 @@ class _RegisterGatePageState extends State<RegisterGatePage> {
 
     setState(() => _isLoading = true);
 
-    // Simula um delay de gravação (remova quando tiver API)
-    await Future.delayed(const Duration(milliseconds: 600));
-
     if (!mounted) return;
 
     final newGate = Gate(
-      id: DateTime.now().millisecondsSinceEpoch,
+      id: null, // o backend atribui o id real ao persistir
       name: _nameController.text.trim(),
       limitTimeStart: _openTimeController.text.trim(),
       limitTimeEnd: _closeTimeController.text.trim(),

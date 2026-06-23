@@ -1,13 +1,9 @@
-/// Modelo de Porteira
-/// Preparado para integração com PostgreSQL
 class Gate {
   final int? id;
   final String name;
   final String limitTimeStart;
   final String limitTimeEnd;
   final bool isClosed;
-  final DateTime? lastActivity;
-  final String? lastActivityDescription;
 
   const Gate({
     this.id,
@@ -15,60 +11,37 @@ class Gate {
     required this.limitTimeStart,
     required this.limitTimeEnd,
     required this.isClosed,
-    this.lastActivity,
-    this.lastActivityDescription,
   });
 
-  /// Formato de exibição do horário limite
-  String get limitTimeFormatted => "$limitTimeStart-$limitTimeEnd";
+  String get limitTimeFormatted => '$limitTimeStart–$limitTimeEnd';
 
-  /// Cria uma instância a partir de um Map (para PostgreSQL/JSON)
-  factory Gate.fromMap(Map<String, dynamic> map) {
+  /// Lê o JSON do endpoint `/api/porteiras/` (PorteiraSerializer Django)
+  factory Gate.fromApiJson(Map<String, dynamic> json) {
     return Gate(
-      id: map['id'] as int?,
-      name: map['name'] as String,
-      limitTimeStart: map['limit_time_start'] as String,
-      limitTimeEnd: map['limit_time_end'] as String,
-      isClosed: map['is_closed'] as bool,
-      lastActivity: map['last_activity'] != null
-          ? DateTime.parse(map['last_activity'] as String)
-          : null,
-      lastActivityDescription: map['last_activity_description'] as String?,
+      id:             json['id'] as int?,
+      name:           json['nome'] as String,
+      limitTimeStart: (json['limite_abertura']   as String?) ?? '',
+      limitTimeEnd:   (json['limite_fechamento'] as String?) ?? '',
+      isClosed:       (json['status'] as String?) == 'fechado',
     );
   }
 
-  /// Converte para Map (para inserção no PostgreSQL)
-  Map<String, dynamic> toMap() {
-    return {
-      if (id != null) 'id': id,
-      'name': name,
-      'limit_time_start': limitTimeStart,
-      'limit_time_end': limitTimeEnd,
-      'is_closed': isClosed,
-      'last_activity': lastActivity?.toIso8601String(),
-      'last_activity_description': lastActivityDescription,
-    };
-  }
+  /// Corpo para POST /api/porteiras/
+  Map<String, dynamic> toCreateJson() => {
+    'nome':               name,
+    'status':             isClosed ? 'fechado' : 'aberto',
+    'limite_abertura':    limitTimeStart,
+    'limite_fechamento':  limitTimeEnd,
+  };
 
-  /// Cria uma cópia com valores alterados
-  Gate copyWith({
-    int? id,
-    String? name,
-    String? limitTimeStart,
-    String? limitTimeEnd,
-    bool? isClosed,
-    DateTime? lastActivity,
-    String? lastActivityDescription,
-  }) {
+  Gate copyWith({int? id, String? name, String? limitTimeStart,
+      String? limitTimeEnd, bool? isClosed}) {
     return Gate(
-      id: id ?? this.id,
-      name: name ?? this.name,
+      id:             id             ?? this.id,
+      name:           name           ?? this.name,
       limitTimeStart: limitTimeStart ?? this.limitTimeStart,
-      limitTimeEnd: limitTimeEnd ?? this.limitTimeEnd,
-      isClosed: isClosed ?? this.isClosed,
-      lastActivity: lastActivity ?? this.lastActivity,
-      lastActivityDescription:
-          lastActivityDescription ?? this.lastActivityDescription,
+      limitTimeEnd:   limitTimeEnd   ?? this.limitTimeEnd,
+      isClosed:       isClosed       ?? this.isClosed,
     );
   }
 

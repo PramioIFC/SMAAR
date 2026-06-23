@@ -50,6 +50,22 @@ class DayLog {
   }
 
   /// Cria uma instância a partir de um Map (para PostgreSQL/JSON)
+  /// Deriva um DayLog a partir do status do último registro de um dia.
+  /// Usado ao montar o cache de calendário a partir da API.
+  factory DayLog.fromStatusEntry({
+    required int gateId,
+    required DateTime date,
+    required String status, // 'aberto' | 'fechado'
+  }) {
+    final isClosed = status == 'fechado';
+    return DayLog(
+      gateId:      gateId,
+      date:        date,
+      status:      isClosed ? LogStatus.normal : LogStatus.danger,
+      description: isClosed ? 'Porteira fechada' : 'Porteira aberta',
+    );
+  }
+
   factory DayLog.fromMap(Map<String, dynamic> map) {
     return DayLog(
       id: map['id'] as int?,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../repositories/repositories/auth_repository.dart';
+import '../services/api_client.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -10,24 +11,52 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _formKey           = GlobalKey<FormState>();
-  final _nameController    = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _authRepo          = MockAuthRepository();
+  final _formKey              = GlobalKey<FormState>();
+  final _nameController       = TextEditingController();
+  final _passwordController   = TextEditingController();
+  final _serverController     = TextEditingController();
+  final _authRepo = ApiAuthRepository();
 
-  bool _obscurePassword = true;
-  bool _isLoading       = false;
+  bool _obscurePassword  = true;
+  bool _isLoading        = false;
+  bool _showServer       = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedUrl();
+  }
+
+  Future<void> _loadSavedUrl() async {
+    final saved = await ApiClient().getBaseUrl();
+    if (saved != null && mounted) {
+      // Mostra só o host/IP para o usuário (sem http:// e /api)
+      final display = saved
+          .replaceFirst(RegExp(r'^https?://'), '')
+          .replaceFirst(RegExp(r'/api$'), '');
+      _serverController.text = display;
+    }
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _passwordController.dispose();
+    _serverController.dispose();
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Salva a URL do servidor antes de tentar login
+    final serverText = _serverController.text.trim();
+    if (serverText.isEmpty) {
+      setState(() => _errorMessage = 'Informe o endereço do servidor (ex: 192.168.1.50)');
+      return;
+    }
+    await ApiClient().saveBaseUrl(serverText);
 
     setState(() {
       _isLoading    = true;
@@ -43,7 +72,6 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = false);
 
     if (result.isSuccess) {
-      // Registra o usuário no estado global antes de navegar
       await AppState.of(context).login(result.user!);
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/');
@@ -137,6 +165,11 @@ class _LoginPageState extends State<LoginPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Servidor ──────────────────────────────────────────────────────
+          _buildServerSection(),
+          const SizedBox(height: 20),
+
+          // ── Nome ──────────────────────────────────────────────────────────
           _buildLabel('Nome'),
           const SizedBox(height: 8),
           _buildTextField(
@@ -147,6 +180,8 @@ class _LoginPageState extends State<LoginPage> {
                 (v == null || v.trim().isEmpty) ? 'Informe o nome' : null,
           ),
           const SizedBox(height: 20),
+
+          // ── Senha ─────────────────────────────────────────────────────────
           _buildLabel('Senha'),
           const SizedBox(height: 8),
           _buildTextField(
@@ -169,6 +204,7 @@ class _LoginPageState extends State<LoginPage> {
                 (v == null || v.isEmpty) ? 'Informe a senha' : null,
           ),
           const SizedBox(height: 32),
+
           if (_errorMessage != null) ...[
             Container(
               width: double.infinity,
@@ -198,6 +234,103 @@ class _LoginPageState extends State<LoginPage> {
           _buildLoginButton(),
         ],
       ),
+    );
+  }
+
+  Widget _buildServerSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Cabeçalho clicável
+        GestureDetector(
+          onTap: () => setState(() => _showServer = !_showServer),
+          child: Row(
+            children: [
+              const Icon(Icons.settings_ethernet_rounded,
+                  size: 16, color: Color(0xFF81C784)),
+              const SizedBox(width: 6),
+              const Text(
+                'Servidor',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF2E7D32),
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                _showServer
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: const Color(0xFF81C784),
+              ),
+            ],
+          ),
+        ),
+
+        // Campo expansível
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 200),
+          crossFadeState: _showServer
+              ? CrossFadeState.showFirst
+              : CrossFadeState.showSecond,
+          firstChild: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: TextFormField(
+              controller: _serverController,
+              keyboardType: TextInputType.url,
+              style: const TextStyle(
+                fontSize: 15,
+                color: Color(0xFF1B5E20),
+                fontWeight: FontWeight.w500,
+              ),
+              decoration: InputDecoration(
+                hintText: 'ex: 192.168.1.50 ou 192.168.1.50:8000',
+                hintStyle:
+                    const TextStyle(color: Color(0xFFB0BEC5), fontSize: 13),
+                prefixIcon: const Padding(
+                  padding: EdgeInsets.only(left: 14, right: 10),
+                  child: Icon(Icons.dns_outlined,
+                      color: Color(0xFF81C784), size: 22),
+                ),
+                prefixIconConstraints: const BoxConstraints(),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      const BorderSide(color: Color(0xFFE8F5E9), width: 1.5),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      const BorderSide(color: Color(0xFF4CAF50), width: 2),
+                ),
+              ),
+            ),
+          ),
+          secondChild: const SizedBox.shrink(),
+        ),
+
+        // Indicador de servidor configurado (quando recolhido)
+        if (!_showServer && _serverController.text.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              _serverController.text,
+              style: const TextStyle(
+                  fontSize: 12, color: Color(0xFF81C784)),
+            ),
+          ),
+      ],
     );
   }
 
