@@ -112,7 +112,7 @@ O APK gerado fica em `build/app/outputs/flutter-apk/app-release.apk`.
 
 1. Abra o app no celular
 2. Na tela de login, toque em **"Servidor"**
-3. Digite o IP do computador (ex: `192.168.1.100`)
+3. Digite o IP do computador (ex: `192.168.3.100`)
 4. Crie uma conta tocando em **"Cadastre-se"** ou faça login se já tiver conta
 5. Pronto — o IP fica salvo, não precisa digitar de novo
 
