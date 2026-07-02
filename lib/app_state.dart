@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'models/models.dart';
 import 'utils/date_utils.dart';
@@ -20,6 +21,8 @@ class AppStateData extends ChangeNotifier {
   bool _loadingGates = false;
   bool get loadingGates => _loadingGates;
 
+  Timer? _pollTimer;
+
   AppStateData({required GateRepository gateRepo}) : _gateRepo = gateRepo;
 
   // ── Porteiras ──────────────────────────────────────────────────────────────
@@ -38,15 +41,46 @@ class AppStateData extends ChangeNotifier {
     _currentUser = user;
     notifyListeners();
     await _reloadAll();
+    _startPolling();
   }
 
   Future<void> logout() async {
+    _stopPolling();
     _currentUser = null;
     _gates.clear();
     _events.clear();
     _logs.clear();
     await ApiClient().clearTokens();
     notifyListeners();
+  }
+
+  // [NOVO] Restaura a sessão a partir do token JWT já salvo no FlutterSecureStorage.
+  //
+  // Chamado no boot do app (main.dart/_SmaarAppState.initState) para evitar que
+  // o usuário precise fazer login toda vez que fechar e reabrir o app.
+  //
+  // Fluxo:
+  //   1. Chama GET /api/me/ com o token salvo
+  //   2. Se OK → popula _currentUser e carrega os dados normalmente
+  //   3. Se falhar (token expirado/inválido) → limpa os tokens e retorna false
+  //      (o _AuthGuard vai redirecionar para /login naturalmente)
+  Future<bool> reloadFromToken() async {
+    try {
+      final data = await ApiClient().get('/me/') as Map<String, dynamic>;
+      _currentUser = User(
+        id:   data['id']       as int,
+        name: data['username'] as String,
+      );
+      notifyListeners();
+      await _reloadAll();
+      _startPolling();
+      return true;
+    } catch (_) {
+      // Token expirado, inválido ou servidor inacessível — força novo login
+      await ApiClient().clearTokens();
+      _stopPolling();
+      return false;
+    }
   }
 
   // ── Carga completa do backend ──────────────────────────────────────────────
@@ -58,7 +92,9 @@ class AppStateData extends ChangeNotifier {
 
     try {
       final gates = await _gateRepo.getGatesForUser(_currentUser!.id!);
-      _gates..clear()..addAll(gates);
+      _gates
+        ..clear()
+        ..addAll(gates);
       _events.clear();
       _logs.clear();
 
@@ -72,9 +108,50 @@ class AppStateData extends ChangeNotifier {
     }
   }
 
+  void _startPolling() {
+    _stopPolling();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_currentUser != null) {
+        _silentReloadGates();
+      }
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _silentReloadGates() async {
+    if (_currentUser?.id == null) return;
+    try {
+      final updatedGates = await _gateRepo.getGatesForUser(_currentUser!.id!);
+      bool changed = false;
+      
+      for (final newGate in updatedGates) {
+        final idx = _gates.indexWhere((g) => g.id == newGate.id);
+        if (idx != -1) {
+          if (_gates[idx].isClosed != newGate.isClosed) {
+            _gates[idx] = newGate;
+            changed = true;
+            if (newGate.id != null) {
+               await _loadHistoryForGate(newGate.id!);
+            }
+          }
+        }
+      }
+      
+      if (changed) {
+        notifyListeners();
+      }
+    } catch (_) {
+      // Ignore poll errors to avoid disrupting user experience
+    }
+  }
+
   Future<void> _loadHistoryForGate(int gateId) async {
-    // Backend devolve mais recente primeiro; invertemos para cronológico
-    final registros = (await _gateRepo.getRegistrosForGate(gateId)).reversed.toList();
+    final registros =
+        (await _gateRepo.getRegistrosForGate(gateId)).reversed.toList();
 
     final byDate = <String, List<DayEvent>>{};
     for (final e in registros) {
@@ -96,7 +173,11 @@ class AppStateData extends ChangeNotifier {
   // ── Leitura ────────────────────────────────────────────────────────────────
 
   Gate? gateById(int id) {
-    try { return _gates.firstWhere((g) => g.id == id); } catch (_) { return null; }
+    try {
+      return _gates.firstWhere((g) => g.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 
   List<DayEvent> eventsForGateAndKey(int gateId, String dateKey) =>
@@ -139,9 +220,6 @@ class AppStateData extends ChangeNotifier {
 
   // ── Mutação ────────────────────────────────────────────────────────────────
 
-  /// Abre/fecha a porteira.
-  /// Atualiza a UI imediatamente (otimista) e confirma com o backend;
-  /// reverte se o servidor recusar.
   void toggleGate(int gateId, bool close) {
     final idx = _gates.indexWhere((g) => g.id == gateId);
     if (idx == -1) return;
@@ -152,13 +230,14 @@ class AppStateData extends ChangeNotifier {
 
     _gateRepo.updateGateStatus(gateId, close).then((registro) {
       final key = DateHelper.dateToKey(registro.date);
-      _events.putIfAbsent(gateId, () => {})
-             .putIfAbsent(key, () => [])
-             .add(registro);
+      _events
+          .putIfAbsent(gateId, () => {})
+          .putIfAbsent(key, () => [])
+          .add(registro);
 
-      final logList = _logs.putIfAbsent(gateId, () => []);
+      final logList  = _logs.putIfAbsent(gateId, () => []);
       final existIdx = logList.indexWhere((l) => l.dateKey == key);
-      final newLog = DayLog.fromStatusEntry(
+      final newLog   = DayLog.fromStatusEntry(
         gateId: gateId,
         date:   registro.date,
         status: close ? 'fechado' : 'aberto',
@@ -170,17 +249,16 @@ class AppStateData extends ChangeNotifier {
       }
       notifyListeners();
     }).catchError((_) {
-      // Reverte atualização otimista
       final i = _gates.indexWhere((g) => g.id == gateId);
       if (i != -1) _gates[i] = prev;
       notifyListeners();
     });
   }
 
-  /// Cadastra nova porteira no backend e adiciona ao cache.
   Future<void> addGate(Gate gate) async {
     if (_currentUser?.id == null) return;
-    final persisted = await _gateRepo.createGate(gate, ownerId: _currentUser!.id!);
+    final persisted =
+        await _gateRepo.createGate(gate, ownerId: _currentUser!.id!);
     _gates.add(persisted);
     if (persisted.id != null) {
       _events[persisted.id!] = {};
@@ -193,8 +271,11 @@ class AppStateData extends ChangeNotifier {
 // ── InheritedNotifier ─────────────────────────────────────────────────────────
 
 class AppState extends InheritedNotifier<AppStateData> {
-  const AppState({super.key, required AppStateData state, required super.child})
-      : super(notifier: state);
+  const AppState({
+    super.key,
+    required AppStateData state,
+    required super.child,
+  }) : super(notifier: state);
 
   static AppStateData of(BuildContext context) {
     final inherited = context.dependOnInheritedWidgetOfExactType<AppState>();

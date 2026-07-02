@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models/models.dart';
+import '../services/api_client.dart';
 import '../widgets/widgets.dart';
 
 class GatePage extends StatefulWidget {
@@ -44,7 +45,89 @@ class _GatePageState extends State<GatePage> {
 
   void _handleAction(BuildContext context, bool close, int? gateId) {
     if (gateId == null) return;
+    // Atualiza o status no banco (histórico, calendário, etc.)
     AppState.of(context).toggleGate(gateId, close);
+    // [CORRIGIDO] Sem isso, o Arduino nunca recebia o comando HTTP —
+    // só o banco de dados mudava de status, a porteira física não.
+    ApiClient().enviarComandoArduino(close ? 'trancar' : 'abrir').then((ok) {
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Status salvo, mas o Arduino não respondeu. '
+              'Verifique se ele está ligado e na mesma rede.',
+            ),
+            backgroundColor: Color(0xFFD32F2F),
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> _abrirConfigArduino(BuildContext context) async {
+    // Busca o IP atual salvo no backend
+    final config = await ApiClient().buscarConfigArduino();
+    final ipController = TextEditingController(text: config?['ip'] ?? '');
+    final portaController = TextEditingController(
+      text: '${config?['porta'] ?? 80}',
+    );
+
+    if (!context.mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Configurar Arduino'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ipController,
+              decoration: const InputDecoration(
+                labelText: 'IP do Arduino',
+                hintText: '10.115.234.105',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: portaController,
+              decoration: const InputDecoration(labelText: 'Porta'),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final ip = ipController.text.trim();
+              final porta = int.tryParse(portaController.text) ?? 80;
+              if (ip.isEmpty) return;
+              try {
+                await ApiClient().salvarIpArduino(ip, porta: porta);
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('IP do Arduino salvo!')),
+                  );
+                }
+              } catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+                }
+              }
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -52,8 +135,7 @@ class _GatePageState extends State<GatePage> {
     final state = AppState.of(context);
     final routeArgs = ModalRoute.of(context)?.settings.arguments;
     final gate = _resolveGate(state, routeArgs);
-    final lastEvent =
-        gate.id != null ? state.lastEventForGate(gate.id!) : null;
+    final lastEvent = gate.id != null ? state.lastEventForGate(gate.id!) : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -76,7 +158,7 @@ class _GatePageState extends State<GatePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.black, size: 28),
-            onPressed: () {},
+            onPressed: () => _abrirConfigArduino(context), // ← agora funciona
           ),
         ],
       ),
@@ -102,8 +184,9 @@ class _GatePageState extends State<GatePage> {
   }
 
   Widget _buildStatusSection(Gate gate) {
-    final statusColor =
-        gate.isClosed ? const Color(0xFF4CAF50) : const Color(0xFFD32F2F);
+    final statusColor = gate.isClosed
+        ? const Color(0xFF4CAF50)
+        : const Color(0xFFD32F2F);
     final statusText = gate.isClosed ? 'FECHADA' : 'ABERTA';
 
     return AnimatedSwitcher(
@@ -225,8 +308,7 @@ class _GatePageState extends State<GatePage> {
                 TextSpan(text: '  ${lastEvent.title}'),
                 TextSpan(
                   text: '\n${lastEvent.subtitle}',
-                  style:
-                      TextStyle(fontSize: 12, color: colors.subtitleColor),
+                  style: TextStyle(fontSize: 12, color: colors.subtitleColor),
                 ),
               ],
             ),
@@ -239,7 +321,6 @@ class _GatePageState extends State<GatePage> {
   Widget _buildActionButtons(BuildContext context, Gate gate) {
     return Row(
       children: [
-        // ABRIR: vermelho (inseguro), ativo só quando porteira está fechada
         Expanded(
           child: AnimatedOpacity(
             duration: const Duration(milliseconds: 300),
@@ -255,7 +336,6 @@ class _GatePageState extends State<GatePage> {
           ),
         ),
         const SizedBox(width: 15),
-        // FECHAR: verde (seguro), ativo só quando porteira está aberta
         Expanded(
           child: AnimatedOpacity(
             duration: const Duration(milliseconds: 300),
@@ -276,8 +356,7 @@ class _GatePageState extends State<GatePage> {
 
   Widget _buildHistoryButton(BuildContext context, Gate gate) {
     return GestureDetector(
-      onTap: () =>
-          Navigator.pushNamed(context, '/history', arguments: gate.id),
+      onTap: () => Navigator.pushNamed(context, '/history', arguments: gate.id),
       child: Container(
         width: double.infinity,
         height: 60,

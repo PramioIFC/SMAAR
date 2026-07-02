@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_state.dart';
+import 'services/api_client.dart';                   // [NOVO] para checar token
 import 'repositories/repositories/gate_repository.dart';
 import 'pages/main_page.dart';
 import 'pages/history_page.dart';
@@ -25,16 +26,44 @@ class SmaarApp extends StatefulWidget {
 class _SmaarAppState extends State<SmaarApp> {
   late final AppStateData _state;
 
+  // [NOVO] Impede que o _AuthGuard redirecione para /login antes de
+  // reloadFromToken() terminar — evita o flash de tela de login no boot.
+  bool _sessionChecked = false;
+
   @override
   void initState() {
     super.initState();
-    // Repositório real — fala com o backend Django via HTTP/JWT.
-    // Para mudar a URL base, edite ApiClient.baseUrl em services/api_client.dart.
     _state = AppStateData(gateRepo: ApiGateRepository());
+    _restoreSession(); // [NOVO]
+  }
+
+  // [NOVO] Tenta restaurar a sessão a partir do JWT salvo no FlutterSecureStorage.
+  // Se tiver token válido, chama reloadFromToken() que faz GET /api/me/ e
+  // carrega porteiras/histórico normalmente — usuário vai direto para /
+  // sem precisar fazer login de novo.
+  Future<void> _restoreSession() async {
+    final hasToken = await ApiClient().isAuthenticated;
+    if (hasToken) {
+      await _state.reloadFromToken();
+    }
+    if (mounted) setState(() => _sessionChecked = true);
   }
 
   @override
   Widget build(BuildContext context) {
+    // [NOVO] Exibe um loading enquanto _restoreSession() ainda está rodando.
+    // Sem esse guard, o _AuthGuard renderiza com isLoggedIn = false e
+    // empurra o usuário para /login antes de a sessão ser restaurada.
+    if (!_sessionChecked) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: Colors.white,
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
     return AppState(
       state: _state,
       child: MaterialApp(
@@ -45,7 +74,9 @@ class _SmaarAppState extends State<SmaarApp> {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           fontFamily: 'sans-serif',
         ),
-        initialRoute: '/login',
+        // [CORRIGIDO] initialRoute dinâmica: vai para / se já estiver logado,
+        // para /login caso contrário — o _AuthGuard cobre as rotas protegidas.
+        initialRoute: _state.isLoggedIn ? '/' : '/login',
         routes: {
           '/login':        (context) => const LoginPage(),
           '/register':     (context) => const RegisterUserPage(),
