@@ -43,28 +43,45 @@ class _GatePageState extends State<GatePage> {
     );
   }
 
-  void _handleAction(BuildContext context, bool close, int? gateId) {
+  Future<void> _handleAction(BuildContext context, bool close, int? gateId) async {
     if (gateId == null) return;
-    // Atualiza o status no banco (histórico, calendário, etc.)
-    AppState.of(context).toggleGate(gateId, close);
-    // [CORRIGIDO] Sem isso, o Arduino nunca recebia o comando HTTP —
-    // só o banco de dados mudava de status, a porteira física não.
-    ApiClient().enviarComandoArduino(close ? 'trancar' : 'abrir').then((ok) {
-      if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Status salvo, mas o Arduino não respondeu. '
-              'Verifique se ele está ligado e na mesma rede.',
+    try {
+      // Atualiza o status no banco (histórico, calendário, etc.)
+      await AppState.of(context).toggleGate(gateId, close);
+      // [CORRIGIDO] Sem isso, o Arduino nunca recebia o comando HTTP —
+      // só o banco de dados mudava de status, a porteira física não.
+      if (!context.mounted) return;
+      ApiClient().enviarComandoArduino(close ? 'trancar' : 'abrir').then((ok) {
+        if (!ok && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Status salvo, mas o Arduino não respondeu. '
+                'Verifique se ele está ligado e na mesma rede.',
+              ),
+              backgroundColor: Color(0xFFD32F2F),
             ),
-            backgroundColor: Color(0xFFD32F2F),
-          ),
-        );
+          );
+        }
+      });
+    } catch (e) {
+      if (!context.mounted) return;
+      // Extrai a mensagem de erro do backend (ex: "Fora do horário permitido")
+      String msg = 'Erro ao alterar porteira.';
+      final eStr = e.toString();
+      if (eStr.contains('403')) {
+        msg = 'Horário não permitido';
       }
-    });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: const Color(0xFFD32F2F),
+        ),
+      );
+    }
   }
 
-  Future<void> _abrirConfigArduino(BuildContext context) async {
+  Future<void> _abrirConfigArduino(BuildContext context, Gate gate) async {
     // Busca o IP atual salvo no backend
     final config = await ApiClient().buscarConfigArduino();
     final ipController = TextEditingController(text: config?['ip'] ?? '');
@@ -72,30 +89,51 @@ class _GatePageState extends State<GatePage> {
       text: '${config?['porta'] ?? 80}',
     );
 
+    // Novos campos da porteira
+    final nameController = TextEditingController(text: gate.name);
+    final startController = TextEditingController(text: gate.limitTimeStart);
+    final endController = TextEditingController(text: gate.limitTimeEnd);
+
     if (!context.mounted) return;
 
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Configurar Arduino'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: ipController,
-              decoration: const InputDecoration(
-                labelText: 'IP do Arduino',
-                hintText: '10.115.234.105',
+        title: const Text('Configurações'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Porteira', style: TextStyle(fontWeight: FontWeight.bold)),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Nome da porteira'),
               ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: portaController,
-              decoration: const InputDecoration(labelText: 'Porta'),
-              keyboardType: TextInputType.number,
-            ),
-          ],
+              TextField(
+                controller: startController,
+                decoration: const InputDecoration(labelText: 'Horário Inicial (ex: 08:00)'),
+              ),
+              TextField(
+                controller: endController,
+                decoration: const InputDecoration(labelText: 'Horário Final (ex: 18:00)'),
+              ),
+              const Divider(height: 32),
+              const Text('Arduino Local', style: TextStyle(fontWeight: FontWeight.bold)),
+              TextField(
+                controller: ipController,
+                decoration: const InputDecoration(
+                  labelText: 'IP do Arduino',
+                  hintText: '192.168.1.100',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              TextField(
+                controller: portaController,
+                decoration: const InputDecoration(labelText: 'Porta (ex: 80)'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -106,20 +144,40 @@ class _GatePageState extends State<GatePage> {
             onPressed: () async {
               final ip = ipController.text.trim();
               final porta = int.tryParse(portaController.text) ?? 80;
-              if (ip.isEmpty) return;
+
+              final newName = nameController.text.trim();
+              final newStart = startController.text.trim();
+              final newEnd = endController.text.trim();
+
               try {
-                await ApiClient().salvarIpArduino(ip, porta: porta);
+                // Atualiza IP se preenchido
+                if (ip.isNotEmpty) {
+                  await ApiClient().salvarIpArduino(ip, porta: porta);
+                }
+                
+                // Atualiza Porteira
+                if (newName.isNotEmpty) {
+                  final updatedGate = gate.copyWith(
+                    name: newName,
+                    limitTimeStart: newStart,
+                    limitTimeEnd: newEnd,
+                  );
+                  if (ctx.mounted) {
+                    await AppState.of(ctx).updateGate(updatedGate);
+                  }
+                }
+
                 if (ctx.mounted) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('IP do Arduino salvo!')),
+                    const SnackBar(content: Text('Configurações salvas com sucesso!')),
                   );
                 }
               } catch (e) {
                 if (ctx.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erro ao salvar: $e')),
+                  );
                 }
               }
             },
@@ -158,7 +216,7 @@ class _GatePageState extends State<GatePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.black, size: 28),
-            onPressed: () => _abrirConfigArduino(context), // ← agora funciona
+            onPressed: () => _abrirConfigArduino(context, gate), 
           ),
         ],
       ),
@@ -322,32 +380,20 @@ class _GatePageState extends State<GatePage> {
     return Row(
       children: [
         Expanded(
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 300),
-            opacity: gate.isClosed ? 1.0 : 0.35,
-            child: ActionButton(
-              label: 'ABRIR',
-              icon: Icons.lock_open_outlined,
-              color: const Color(0xFFD32F2F),
-              onTap: gate.isClosed
-                  ? () => _handleAction(context, false, gate.id)
-                  : () {},
-            ),
+          child: ActionButton(
+            label: 'ABRIR',
+            icon: Icons.lock_open_outlined,
+            color: const Color(0xFFD32F2F),
+            onTap: () => _handleAction(context, false, gate.id),
           ),
         ),
         const SizedBox(width: 15),
         Expanded(
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 300),
-            opacity: !gate.isClosed ? 1.0 : 0.35,
-            child: ActionButton(
-              label: 'FECHAR',
-              icon: Icons.lock_outlined,
-              color: const Color(0xFF4CAF50),
-              onTap: !gate.isClosed
-                  ? () => _handleAction(context, true, gate.id)
-                  : () {},
-            ),
+          child: ActionButton(
+            label: 'FECHAR',
+            icon: Icons.lock_outlined,
+            color: const Color(0xFF4CAF50),
+            onTap: () => _handleAction(context, true, gate.id),
           ),
         ),
       ],

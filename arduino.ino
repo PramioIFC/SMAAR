@@ -62,11 +62,11 @@ const int SERVO_TRAVADO    = 85;
 const int SERVO_DESTRAVADO = 0;
 
 // -- Timing de destrave (item 9 - A CALIBRAR no hardware real) ------------
-const unsigned long TEMPO_DESTRAVE_TRAVA    = 1500;  // ms - lado batente (abrir)
+const unsigned long TEMPO_DESTRAVE_TRAVA    = 4000;  // ms - lado batente (abrir)
 const unsigned long TEMPO_DESTRAVE_ABERTURA = 500;   // ms - lado palanque (fechar)
 
 // -- Configuracao do Backend Django ---------------------------------------
-const String DJANGO_IP   = "10.70.119.74";   // <-- IP LOCAL DO SEU PC (Wi-Fi)
+const String DJANGO_IP   = "192.168.1.100";  // <-- IP LOCAL DO SEU PC (Wi-Fi)
 const int    DJANGO_PORT = 8000;
 const int    PORTEIRA_ID = 1;
 
@@ -76,6 +76,14 @@ String _bufferWifi = "";
 // Canal TCP da ultima requisicao recebida pelo ESP8266.
 // Extraido do prefixo +IPD,canal,tamanho de cada frame.
 int _canalAtual = 0;
+
+// Estado anterior dos sensores (para detectar movimento manual)
+bool ultimoEstadoEmCasa = false;
+bool ultimoEstadoNoPalanque = false;
+
+// Temporizadores nao-bloqueantes para manter destravado
+unsigned long ultimoDestraveTrava = 0;
+unsigned long ultimoDestraveAbertura = 0;
 
 // -------------------------------------------------------------------------
 void setup() {
@@ -116,7 +124,7 @@ void setup() {
   enviarAT("AT+CWMODE=1", 500);
 
   Serial.println(F("Conectando ao Wi-Fi..."));
-  enviarAT("AT+CWJAP=\"Pramio\",\"12345678\"", 10000);
+  enviarAT("AT+CWJAP=\"NOME_DA_REDE\",\"SENHA_DA_REDE\"", 10000);
   delay(2000);
 
   // Exibe o IP no Serial Monitor - anote para configurar no app
@@ -133,8 +141,8 @@ void setup() {
 
 // -------------------------------------------------------------------------
 void loop() {
-  bool botaoAbrir  = (digitalRead(BOTAO_ABRIR)  == LOW);
-  bool botaoFechar = (digitalRead(BOTAO_FECHAR) == LOW);
+  bool btnFisicoAbrir  = (digitalRead(BOTAO_ABRIR)  == LOW);
+  bool btnFisicoFechar = (digitalRead(BOTAO_FECHAR) == LOW);
 
   bool comandoAbrir  = false;
   bool comandoFechar = false;
@@ -143,51 +151,82 @@ void loop() {
   bool emCasa     = (digitalRead(SENSOR_MAG1) == LOW);  // travada no batente
   bool noPalanque = (digitalRead(SENSOR_MAG2) == LOW);  // travada no palanque
 
-  if (emCasa) {
-    // Trava do batente engatada - mantem segura.
+  // Logica de Botao Unico (usando o botao do Pino 4)
+  bool botaoAbrir = btnFisicoAbrir;
+  bool botaoFechar = false;
+
+  if (btnFisicoFechar) {
+    if (emCasa) {
+      // Se esta fechada no batente, o botao funciona como ABRIR
+      botaoAbrir = true;
+    } else if (noPalanque) {
+      // Se esta aberta no palanque, o botao funciona como FECHAR
+      botaoFechar = true;
+    } else {
+      // Se esta no meio do caminho, aciona os dois para resgate
+      botaoAbrir = true;
+      botaoFechar = true;
+    }
+  }
+
+  if (emCasa && !ultimoEstadoEmCasa) {
+    // Levanta a trava IMEDIATAMENTE antes de gastar 4s com a rede
     servoTrava.write(SERVO_TRAVADO);
     digitalWrite(LED_VERDE,    HIGH);
     digitalWrite(LED_VERMELHO, LOW);
-
-    if (botaoAbrir || comandoAbrir) {
-      Serial.println(F("Acao: ABRIR (destrava lado batente)"));
-      servoTrava.write(SERVO_DESTRAVADO);
-      digitalWrite(LED_VERMELHO, HIGH);
-      digitalWrite(LED_VERDE,    LOW);
-      delay(TEMPO_DESTRAVE_TRAVA);
-
-      // Se foi pelo botao fisico, notifica o Django
-      if (botaoAbrir) {
-        notificarBackend("aberto");
-      }
-    }
-
-  } else if (noPalanque) {
-    // Trava do palanque engatada - mantem segura.
+    notificarBackend("fechado");
+  }
+  if (noPalanque && !ultimoEstadoNoPalanque) {
+    // Levanta a trava IMEDIATAMENTE antes de gastar 4s com a rede
     servoAbertura.write(SERVO_TRAVADO);
     digitalWrite(LED_VERDE,    HIGH);
     digitalWrite(LED_VERMELHO, LOW);
+    notificarBackend("aberto");
+  }
 
-    if (botaoFechar || comandoFechar) {
-      Serial.println(F("Acao: FECHAR (destrava lado palanque)"));
-      servoAbertura.write(SERVO_DESTRAVADO);
-      digitalWrite(LED_VERMELHO, HIGH);
-      digitalWrite(LED_VERDE,    LOW);
-      delay(TEMPO_DESTRAVE_ABERTURA);
+  ultimoEstadoEmCasa = emCasa;
+  ultimoEstadoNoPalanque = noPalanque;
 
-      // Se foi pelo botao fisico, notifica o Django
-      if (botaoFechar) {
-        notificarBackend("fechado");
-      }
+  // =========================================================================
+  // LOGICA DE OVERRIDE (BOTOES/APP SEMPRE FUNCIONAM COMO RESGATE)
+  // =========================================================================
+  
+  if (botaoAbrir || comandoAbrir) {
+    // Forca o destrave do batente independente dos sensores
+    Serial.println(F("Acao: ABRIR (destrava batente forcado)"));
+    servoTrava.write(SERVO_DESTRAVADO);
+    digitalWrite(LED_VERMELHO, HIGH);
+    digitalWrite(LED_VERDE,    LOW);
+    ultimoDestraveTrava = millis(); // Inicia o tempo destravado sem congelar
+    if (botaoAbrir) notificarBackend("aberto");
+  } else if (emCasa) {
+    // Se passou o tempo de destrave, trava novamente (SEGURO)
+    if (millis() - ultimoDestraveTrava > TEMPO_DESTRAVE_TRAVA) {
+      servoTrava.write(SERVO_TRAVADO);
+      digitalWrite(LED_VERDE,    HIGH);
+      digitalWrite(LED_VERMELHO, LOW);
     }
+  }
 
-  } else {
-    /*
-      Porteira em transito saiu de um ima e ainda nao chegou no outro.
-      Nao faz nada alem de esperar - o proximo ciclo vai detectar quando
-      ela encostar em algum dos dois lados.
-    */
-    Serial.println(F("Porteira em transito..."));
+  if (botaoFechar || comandoFechar) {
+    // Forca o destrave do palanque independente dos sensores
+    Serial.println(F("Acao: FECHAR (destrava palanque forcado)"));
+    servoAbertura.write(SERVO_DESTRAVADO);
+    digitalWrite(LED_VERMELHO, HIGH);
+    digitalWrite(LED_VERDE,    LOW);
+    ultimoDestraveAbertura = millis(); // Inicia o tempo destravado sem congelar
+    if (botaoFechar) notificarBackend("fechado");
+  } else if (noPalanque) {
+    // Se passou o tempo de destrave, trava novamente (SEGURO)
+    if (millis() - ultimoDestraveAbertura > TEMPO_DESTRAVE_ABERTURA) {
+      servoAbertura.write(SERVO_TRAVADO);
+      digitalWrite(LED_VERDE,    HIGH);
+      digitalWrite(LED_VERMELHO, LOW);
+    }
+  }
+
+  if (!emCasa && !noPalanque) {
+    Serial.println(F("Porteira em transito (ou sensores desalinhados)..."));
   }
 
   /*
@@ -266,8 +305,17 @@ void responderOK(int canal) {
 void enviarAT(const String &cmd, unsigned int espera) {
   esp.println(cmd);
   unsigned long t = millis();
+  String resposta = "";
   while (millis() - t < espera) {
-    if (esp.available()) Serial.write(esp.read());
+    if (esp.available()) {
+      char c = esp.read();
+      Serial.write(c);
+      resposta += c;
+      // Sai imediatamente se o ESP8266 ja respondeu, cortando o delay inútil!
+      if (resposta.endsWith("OK\r\n") || resposta.endsWith("ERROR\r\n") || resposta.endsWith("FAIL\r\n") || resposta.endsWith("CLOSED\r\n")) {
+        break;
+      }
+    }
   }
 }
 

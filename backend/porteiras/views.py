@@ -1,6 +1,9 @@
+from datetime import datetime as _dt
+
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.utils import timezone
 
 from .models import Porteira, RegistroPorteira
 from .serializers import PorteiraSerializer, RegistroSerializer
@@ -41,6 +44,34 @@ class PorteiraViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def abrir(self, request, pk=None):
         """POST /api/porteiras/{id}/abrir/"""
+        porteira = self.get_object()
+
+        # Validação de horário: se ambos os limites estiverem preenchidos,
+        # só permite abrir dentro da janela configurada.
+        inicio = (porteira.limite_abertura or '').strip()
+        fim    = (porteira.limite_fechamento or '').strip()
+
+        if inicio and fim:
+            try:
+                t_inicio = _dt.strptime(inicio, '%H:%M').time()
+                t_fim    = _dt.strptime(fim,    '%H:%M').time()
+                agora    = timezone.localtime().time()
+
+                if t_inicio <= t_fim:
+                    # Janela normal (ex: 08:00 – 18:00)
+                    fora = not (t_inicio <= agora <= t_fim)
+                else:
+                    # Janela cruzando meia-noite (ex: 22:00 – 06:00)
+                    fora = not (agora >= t_inicio or agora <= t_fim)
+
+                if fora:
+                    return Response({
+                        'erro': f'Fora do horário permitido ({inicio}–{fim}).',
+                        'horario_atual': agora.strftime('%H:%M'),
+                    }, status=403)
+            except ValueError:
+                pass  # formato inválido — ignora a restrição
+
         return self._mudar_status(request, 'aberto')
 
     @action(detail=True, methods=['post'])

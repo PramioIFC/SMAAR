@@ -8,6 +8,7 @@ import '../../services/api_client.dart';
 abstract class GateRepository {
   Future<List<Gate>> getGatesForUser(int userId);
   Future<Gate> createGate(Gate gate, {required int ownerId});
+  Future<Gate> updateGate(Gate gate);
   Future<DayEvent> updateGateStatus(int id, bool isClosed);
   Future<void> deleteGate(int id);
   Future<List<DayEvent>> getRegistrosForGate(int gateId);
@@ -31,6 +32,12 @@ class ApiGateRepository implements GateRepository {
   @override
   Future<Gate> createGate(Gate gate, {required int ownerId}) async {
     final data = await _client.post('/porteiras/', body: gate.toCreateJson());
+    return Gate.fromApiJson(data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Gate> updateGate(Gate gate) async {
+    final data = await _client.put('/porteiras/${gate.id}/', body: gate.toCreateJson());
     return Gate.fromApiJson(data as Map<String, dynamic>);
   }
 

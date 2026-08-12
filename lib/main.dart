@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'services/notification_service.dart';
 import 'app_state.dart';
-import 'services/api_client.dart';                   // [NOVO] para checar token
+import 'services/api_client.dart';                  // [NOVO] para checar token
 import 'repositories/repositories/gate_repository.dart';
 import 'pages/main_page.dart';
 import 'pages/history_page.dart';
@@ -12,10 +14,12 @@ import 'pages/register_gate_page.dart';
 import 'pages/login_page.dart';
 import 'pages/register_user_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  await NotificationService.instance.initialize();
   runApp(const SmaarApp());
 }
-
 class SmaarApp extends StatefulWidget {
   const SmaarApp({super.key});
 
@@ -45,6 +49,8 @@ class _SmaarAppState extends State<SmaarApp> {
     final hasToken = await ApiClient().isAuthenticated;
     if (hasToken) {
       await _state.reloadFromToken();
+      // Registra o token FCM do dispositivo no backend
+      await NotificationService.instance.registerToken();
     }
     if (mounted) setState(() => _sessionChecked = true);
   }

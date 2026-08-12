@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -23,6 +24,7 @@ class ApiClient {
   static const _keyRefresh    = 'refresh_token';
   static const _keyBaseUrl    = 'server_url';
   static const _defaultPort   = '8000';
+  static const _timeout        = Duration(seconds: 5);
 
   // ── URL do servidor ───────────────────────────────────────────────────────
 
@@ -103,18 +105,22 @@ class ApiClient {
     throw ApiException(msg, statusCode: res.statusCode);
   }
 
-  // ── Verbos ────────────────────────────────────────────────────────────────
+  // ── Verbos (todos com timeout de 5s) ───────────────────────────────────────
 
   Future<dynamic> get(
     String path, {
     Map<String, dynamic>? query,
     bool auth = true,
   }) async {
-    final res = await http.get(
-      await _uri(path, query),
-      headers: await _headers(auth: auth),
-    );
-    return _process(res);
+    try {
+      final res = await http.get(
+        await _uri(path, query),
+        headers: await _headers(auth: auth),
+      ).timeout(_timeout);
+      return _process(res);
+    } on TimeoutException {
+      throw const ApiException('Servidor não respondeu a tempo.', statusCode: 408);
+    }
   }
 
   Future<dynamic> post(
@@ -122,26 +128,33 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool auth = true,
   }) async {
-    final res = await http.post(
-      await _uri(path),
-      headers: await _headers(auth: auth),
-      body: body != null ? jsonEncode(body) : null,
-    );
-    return _process(res);
+    try {
+      final res = await http.post(
+        await _uri(path),
+        headers: await _headers(auth: auth),
+        body: body != null ? jsonEncode(body) : null,
+      ).timeout(_timeout);
+      return _process(res);
+    } on TimeoutException {
+      throw const ApiException('Servidor não respondeu a tempo.', statusCode: 408);
+    }
   }
 
-  // [NOVO] Método PUT — necessário para salvarIpArduino (backend aceita PUT, não PATCH)
   Future<dynamic> put(
     String path, {
     Map<String, dynamic>? body,
     bool auth = true,
   }) async {
-    final res = await http.put(
-      await _uri(path),
-      headers: await _headers(auth: auth),
-      body: body != null ? jsonEncode(body) : null,
-    );
-    return _process(res);
+    try {
+      final res = await http.put(
+        await _uri(path),
+        headers: await _headers(auth: auth),
+        body: body != null ? jsonEncode(body) : null,
+      ).timeout(_timeout);
+      return _process(res);
+    } on TimeoutException {
+      throw const ApiException('Servidor não respondeu a tempo.', statusCode: 408);
+    }
   }
 
   Future<dynamic> patch(
@@ -149,17 +162,28 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool auth = true,
   }) async {
-    final res = await http.patch(
-      await _uri(path),
-      headers: await _headers(auth: auth),
-      body: body != null ? jsonEncode(body) : null,
-    );
-    return _process(res);
+    try {
+      final res = await http.patch(
+        await _uri(path),
+        headers: await _headers(auth: auth),
+        body: body != null ? jsonEncode(body) : null,
+      ).timeout(_timeout);
+      return _process(res);
+    } on TimeoutException {
+      throw const ApiException('Servidor não respondeu a tempo.', statusCode: 408);
+    }
   }
 
   Future<void> delete(String path) async {
-    final res = await http.delete(await _uri(path), headers: await _headers());
-    _process(res);
+    try {
+      final res = await http.delete(
+        await _uri(path),
+        headers: await _headers(),
+      ).timeout(_timeout);
+      _process(res);
+    } on TimeoutException {
+      throw const ApiException('Servidor não respondeu a tempo.', statusCode: 408);
+    }
   }
 
   // ── Arduino ───────────────────────────────────────────────────────────────

@@ -94,3 +94,14 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
+}
+
+# ── Firebase Admin SDK (para push notifications) ─────────────────────────────
+# Caminho para o arquivo JSON de credenciais da service account do Firebase.
+# Baixe em: Console Firebase > Configurações > Contas de serviço > Gerar nova chave privada
+FIREBASE_CREDENTIALS = BASE_DIR / 'firebase-credentials.json'

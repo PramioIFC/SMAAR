@@ -36,6 +36,56 @@ class MainPage extends StatelessWidget {
     }
   }
 
+  Future<void> _confirmDelete(BuildContext context, Gate gate) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Excluir porteira'),
+        content: Text(
+          'Tem certeza que deseja excluir "${gate.name}"?\n\n'
+          'Todo o histórico de aberturas e fechamentos será apagado permanentemente.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar',
+                style: TextStyle(color: Color(0xFF757575))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir',
+                style: TextStyle(
+                    color: Color(0xFFE53935), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      try {
+        await AppState.of(context).deleteGate(gate.id!);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('"${gate.name}" excluída com sucesso.'),
+              backgroundColor: const Color(0xFF4CAF50),
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro ao excluir: $e'),
+              backgroundColor: const Color(0xFFD32F2F),
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = AppState.of(context);
@@ -58,51 +108,69 @@ class MainPage extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Minhas Porteiras',
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
-                  ),
-                  GestureDetector(
-                    onTap: () => _logout(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFEBEE),
-                        borderRadius: BorderRadius.circular(20),
+                  Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.grey.shade200, width: 2),
+                          image: const DecorationImage(
+                            image: AssetImage('assets/logo.jpg'),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
                       ),
-                      child: const Row(
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.logout_rounded,
-                              color: Color(0xFFE53935), size: 16),
-                          SizedBox(width: 6),
+                          const Text(
+                            'Bem-vindo,',
+                            style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
                           Text(
-                            'Sair',
-                            style: TextStyle(
-                              color: Color(0xFFE53935),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                            displayName,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1B5E20),
+                              letterSpacing: -0.5,
+                              height: 1.1,
                             ),
                           ),
                         ],
                       ),
+                    ],
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      onPressed: () => _logout(context),
+                      icon: const Icon(Icons.logout_rounded, color: Colors.grey, size: 22),
+                      tooltip: 'Sair',
                     ),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 36),
 
-              Text(
-                'Olá, $displayName',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
+              const Text(
+                'Minhas Porteiras',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                  letterSpacing: -0.3,
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 16),
 
               Expanded(
                 child: gates.isEmpty
@@ -126,6 +194,7 @@ class MainPage extends StatelessWidget {
                               '/history',
                               arguments: gate.id,
                             ),
+                            onDeleteTap: () => _confirmDelete(context, gate),
                           );
                         },
                       ),

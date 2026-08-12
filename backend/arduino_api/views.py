@@ -77,7 +77,12 @@ def sync_status_arduino(request):
     """
     Recebe o status físico do Arduino e atualiza a Porteira no banco.
     Body: { "porteira_id": 1, "status": "aberto" }
+    Dispara notificações push quando a porteira é aberta manualmente.
     """
+    from datetime import datetime as _dt
+    from django.utils import timezone
+    from core.push import notificar_abertura_manual, notificar_abertura_fora_horario
+
     porteira_id = request.data.get('porteira_id')
     novo_status = request.data.get('status', '').strip().lower()
 
@@ -93,5 +98,30 @@ def sync_status_arduino(request):
         porteira.status = novo_status
         porteira.save(update_fields=['status'])
         RegistroPorteira.objects.create(porteira=porteira, status=novo_status)
+
+        # Envia push notification se a porteira foi ABERTA manualmente
+        if novo_status == 'aberto':
+            # Verifica se está fora do horário permitido
+            inicio = (porteira.limite_abertura or '').strip()
+            fim    = (porteira.limite_fechamento or '').strip()
+            fora_horario = False
+
+            if inicio and fim:
+                try:
+                    t_inicio = _dt.strptime(inicio, '%H:%M').time()
+                    t_fim    = _dt.strptime(fim,    '%H:%M').time()
+                    agora    = timezone.localtime().time()
+
+                    if t_inicio <= t_fim:
+                        fora_horario = not (t_inicio <= agora <= t_fim)
+                    else:
+                        fora_horario = not (agora >= t_inicio or agora <= t_fim)
+                except ValueError:
+                    pass
+
+            if fora_horario:
+                notificar_abertura_fora_horario(porteira)
+            else:
+                notificar_abertura_manual(porteira)
 
     return Response({'ok': True, 'status': porteira.status})

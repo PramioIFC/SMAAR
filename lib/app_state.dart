@@ -21,7 +21,7 @@ class AppStateData extends ChangeNotifier {
   bool _loadingGates = false;
   bool get loadingGates => _loadingGates;
 
-  Timer? _pollTimer;
+  bool _polling = false;
 
   AppStateData({required GateRepository gateRepo}) : _gateRepo = gateRepo;
 
@@ -108,18 +108,26 @@ class AppStateData extends ChangeNotifier {
     }
   }
 
+  // ── Polling sequencial ────────────────────────────────────────────────────
+  // Em vez de Timer.periodic (que atropela requisições), usamos um loop
+  // assíncrono que só espera 3s DEPOIS de cada checagem terminar.
+
   void _startPolling() {
-    _stopPolling();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (_currentUser != null) {
-        _silentReloadGates();
-      }
-    });
+    if (_polling) return;
+    _polling = true;
+    _pollLoop();
   }
 
   void _stopPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
+    _polling = false;
+  }
+
+  Future<void> _pollLoop() async {
+    while (_polling && _currentUser != null) {
+      await Future.delayed(const Duration(seconds: 3));
+      if (!_polling || _currentUser == null) break;
+      await _silentReloadGates();
+    }
   }
 
   Future<void> _silentReloadGates() async {
@@ -220,7 +228,7 @@ class AppStateData extends ChangeNotifier {
 
   // ── Mutação ────────────────────────────────────────────────────────────────
 
-  void toggleGate(int gateId, bool close) {
+  Future<void> toggleGate(int gateId, bool close) async {
     final idx = _gates.indexWhere((g) => g.id == gateId);
     if (idx == -1) return;
 
@@ -228,7 +236,8 @@ class AppStateData extends ChangeNotifier {
     _gates[idx] = prev.copyWith(isClosed: close);
     notifyListeners();
 
-    _gateRepo.updateGateStatus(gateId, close).then((registro) {
+    try {
+      final registro = await _gateRepo.updateGateStatus(gateId, close);
       final key = DateHelper.dateToKey(registro.date);
       _events
           .putIfAbsent(gateId, () => {})
@@ -248,11 +257,21 @@ class AppStateData extends ChangeNotifier {
         logList[existIdx] = newLog;
       }
       notifyListeners();
-    }).catchError((_) {
+    } catch (e) {
+      // Reverte o estado otimista
       final i = _gates.indexWhere((g) => g.id == gateId);
       if (i != -1) _gates[i] = prev;
       notifyListeners();
-    });
+      rethrow;  // Propaga para a UI poder exibir o erro
+    }
+  }
+
+  Future<void> deleteGate(int gateId) async {
+    await _gateRepo.deleteGate(gateId);
+    _gates.removeWhere((g) => g.id == gateId);
+    _events.remove(gateId);
+    _logs.remove(gateId);
+    notifyListeners();
   }
 
   Future<void> addGate(Gate gate) async {
@@ -265,6 +284,16 @@ class AppStateData extends ChangeNotifier {
       _logs[persisted.id!]   = [];
     }
     notifyListeners();
+  }
+
+  Future<void> updateGate(Gate updatedGate) async {
+    if (updatedGate.id == null) return;
+    final persisted = await _gateRepo.updateGate(updatedGate);
+    final idx = _gates.indexWhere((g) => g.id == persisted.id);
+    if (idx != -1) {
+      _gates[idx] = persisted;
+      notifyListeners();
+    }
   }
 }
 

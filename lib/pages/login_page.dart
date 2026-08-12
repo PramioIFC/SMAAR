@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../repositories/repositories/auth_repository.dart';
 import '../services/api_client.dart';
+import '../services/notification_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -73,6 +74,8 @@ class _LoginPageState extends State<LoginPage> {
 
     if (result.isSuccess) {
       await AppState.of(context).login(result.user!);
+      // Registra o token de push notifications do dispositivo
+      NotificationService.instance.registerToken();
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/');
     } else {
@@ -116,46 +119,56 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: const Color(0xFF4CAF50),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF4CAF50).withValues(alpha: 0.35),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+    return Center(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Image.asset(
+                'assets/logo.jpg',
+                fit: BoxFit.cover,
               ),
-            ],
+            ),
           ),
-          child: const Icon(Icons.door_front_door_outlined,
-              color: Colors.white, size: 32),
-        ),
-        const SizedBox(height: 24),
-        const Text(
-          'Bem-vindo\nde volta',
-          style: TextStyle(
-            fontSize: 34,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1B5E20),
-            height: 1.15,
+          const SizedBox(height: 32),
+          const Text(
+            'Bem-vindo\nde volta',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B5E20),
+              height: 1.2,
+              letterSpacing: -0.5,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Faça login para continuar',
-          style: TextStyle(
-            fontSize: 15,
-            color: Color(0xFF66BB6A),
-            fontWeight: FontWeight.w500,
+          const SizedBox(height: 8),
+          const Text(
+            'Faça login para continuar',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Color(0xFF66BB6A),
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
