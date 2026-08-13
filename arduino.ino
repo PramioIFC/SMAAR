@@ -66,7 +66,7 @@ const unsigned long TEMPO_DESTRAVE_TRAVA    = 4000;  // ms - lado batente (abrir
 const unsigned long TEMPO_DESTRAVE_ABERTURA = 500;   // ms - lado palanque (fechar)
 
 // -- Configuracao do Backend Django ---------------------------------------
-const String DJANGO_IP   = "192.168.1.100";  // <-- IP LOCAL DO SEU PC (Wi-Fi)
+const String DJANGO_IP   = "192.168.x.x";  // <-- IP LOCAL DO SEU PC (Wi-Fi)
 const int    DJANGO_PORT = 8000;
 const int    PORTEIRA_ID = 1;
 
@@ -124,7 +124,7 @@ void setup() {
   enviarAT("AT+CWMODE=1", 500);
 
   Serial.println(F("Conectando ao Wi-Fi..."));
-  enviarAT("AT+CWJAP=\"NOME_DA_REDE\",\"SENHA_DA_REDE\"", 10000);
+  enviarAT("AT+CWJAP=\"Nomerede\",\"Senharede\"", 10000);
   delay(2000);
 
   // Exibe o IP no Serial Monitor - anote para configurar no app
