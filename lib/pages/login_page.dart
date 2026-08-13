@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../repositories/repositories/auth_repository.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
+
+// URL pública fixa do Ngrok — atualizar aqui se o domínio mudar
+const _kNgrokUrl = 'https://seu-dominio.ngrok-free.app';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -21,21 +25,92 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword  = true;
   bool _isLoading        = false;
   bool _showServer       = false;
+  bool _isDiscovering    = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedUrl();
+    _loadSavedUrl().then((_) {
+      // Sempre tenta descobrir o servidor local ao abrir,
+      // mesmo se já houver um salvo, para lidar com troca de rede (Wi-Fi -> 4G)
+      _discoverServer();
+    });
+  }
+
+  Future<void> _discoverServer() async {
+    setState(() => _isDiscovering = true);
+    RawDatagramSocket? socket;
+    try {
+      socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      socket.broadcastEnabled = true;
+
+      socket.listen((RawSocketEvent event) {
+        if (event == RawSocketEvent.read) {
+          Datagram? dg = socket?.receive();
+          if (dg != null) {
+            String msg = String.fromCharCodes(dg.data);
+            if (msg == 'SMAAR_SERVER') {
+              if (mounted) {
+                setState(() {
+                  _serverController.text = '${dg.address.address}:8000';
+                  _isDiscovering = false;
+                });
+              }
+              socket?.close();
+            }
+          }
+        }
+      });
+
+      // Send broadcast
+      socket.send(
+        'DISCOVER_SMAAR'.codeUnits, 
+        InternetAddress('255.255.255.255'), 
+        8001
+      );
+      
+      // Se não encontrar na rede local após 3s, usa o Ngrok como fallback
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && _isDiscovering) {
+          setState(() {
+            _isDiscovering = false;
+            // Se não encontrou ngm local, muda para Ngrok (exceto se o usuário tiver digitado algo personalizado)
+            final current = _serverController.text;
+            if (current.isEmpty || current.startsWith(RegExp(r'^(192\.|10\.|172\.)'))) {
+              _serverController.text = _kNgrokUrl;
+            }
+          });
+        }
+        socket?.close();
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isDiscovering = false;
+          final current = _serverController.text;
+          if (current.isEmpty || current.startsWith(RegExp(r'^(192\.|10\.|172\.)'))) {
+            _serverController.text = _kNgrokUrl;
+          }
+        });
+      }
+      socket?.close();
+    }
   }
 
   Future<void> _loadSavedUrl() async {
     final saved = await ApiClient().getBaseUrl();
     if (saved != null && mounted) {
-      // Mostra só o host/IP para o usuário (sem http:// e /api)
-      final display = saved
-          .replaceFirst(RegExp(r'^https?://'), '')
-          .replaceFirst(RegExp(r'/api$'), '');
+      String display;
+      if (saved.startsWith('https://')) {
+        // URL externa (ex: Ngrok) — mantém o https:// para o saveBaseUrl funcionar corretamente
+        display = saved.replaceFirst(RegExp(r'/api$'), '');
+      } else {
+        // IP local — remove http:// para exibição limpa
+        display = saved
+            .replaceFirst(RegExp(r'^https?://'), '')
+            .replaceFirst(RegExp(r'/api$'), '');
+      }
       _serverController.text = display;
     }
   }
@@ -272,16 +347,27 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(
-                _showServer
-                    ? Icons.keyboard_arrow_up_rounded
-                    : Icons.keyboard_arrow_down_rounded,
-                size: 18,
-                color: const Color(0xFF81C784),
-              ),
+              if (_isDiscovering) ...[
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: Color(0xFF81C784),
+                  ),
+                ),
+              ] else
+                Icon(
+                  _showServer
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: const Color(0xFF81C784),
+                ),
             ],
           ),
         ),
+
 
         // Campo expansível
         AnimatedCrossFade(
@@ -337,15 +423,30 @@ class _LoginPageState extends State<LoginPage> {
         if (!_showServer && _serverController.text.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              _serverController.text,
-              style: const TextStyle(
-                  fontSize: 12, color: Color(0xFF81C784)),
-            ),
+            child: Builder(builder: (context) {
+              final text = _serverController.text;
+              final isNgrok = text.contains('ngrok');
+              return Row(
+                children: [
+                  Icon(
+                    isNgrok ? Icons.cloud_done_outlined : Icons.wifi_rounded,
+                    size: 13,
+                    color: const Color(0xFF81C784),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isNgrok ? 'Ngrok (automático)' : text,
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFF81C784)),
+                  ),
+                ],
+              );
+            }),
           ),
       ],
     );
   }
+
 
   Widget _buildLabel(String text) {
     return Text(

@@ -53,12 +53,10 @@ class LegendContainer extends StatelessWidget {
         border: Border.all(color: Colors.black12, width: 1.5),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          const LegendItem(color: Color(0xFF4CAF50), label: "Normal"),
-          const LegendItem(color: Colors.orange, label: "Alerta"),
-          const LegendItem(color: Color(0xFFD32F2F), label: "Falha"),
-          LegendItem(color: Colors.grey.shade300, label: "Vazio"),
+          const LegendItem(color: Color(0xFF4CAF50), label: "Fechada"),
+          const LegendItem(color: Color(0xFFD32F2F), label: "Aberta"),
         ],
       ),
     );

@@ -241,42 +241,48 @@ void loop() {
   delay(50);
 }
 
-/*
-  Le bytes disponiveis no buffer do ESP sem bloquear.
-  Acumula em _bufferWifi e so processa quando detecta o fim do frame HTTP
-  (linha em branco \r\n\r\n = fim dos headers).
-
-  Extrai o canal TCP do prefixo +IPD,canal,tamanho e salva em
-  _canalAtual para que responderOK() use o canal correto.
-*/
 void lerComandoWifi(bool &abrir, bool &fechar) {
   while (esp.available()) {
-    _bufferWifi += (char)esp.read();
-  }
-
-  if (_bufferWifi.indexOf("\r\n\r\n") == -1) return;
-
-  String dados = _bufferWifi;
-  _bufferWifi  = "";
-
-  Serial.print(F("Wi-Fi recebeu: "));
-  Serial.println(dados);
-
-  int ipdIdx = dados.indexOf("+IPD,");
-  if (ipdIdx != -1) {
-    int virgula = dados.indexOf(',', ipdIdx + 5);
-    if (virgula != -1) {
-      String canalStr = dados.substring(ipdIdx + 5, virgula);
-      _canalAtual = canalStr.toInt();
+    char c = esp.read();
+    _bufferWifi += c;
+    
+    // PROTECAO DE MEMORIA: Se o buffer ficar muito grande, corta a metade velha.
+    // O Arduino Uno so tem 2KB de RAM; Strings grandes causam travamentos!
+    if (_bufferWifi.length() > 150) {
+      _bufferWifi = _bufferWifi.substring(50); 
     }
   }
 
-  if (dados.indexOf("GET /abrir")   != -1) abrir  = true;
-  if (dados.indexOf("GET /trancar") != -1) fechar = true;
+  if (_bufferWifi.length() == 0) return;
 
-  // Compatibilidade com versao anterior (palavras soltas)
-  if (!abrir  && dados.indexOf("abrir")   != -1) abrir  = true;
-  if (!fechar && dados.indexOf("trancar") != -1) fechar = true;
+  // Busca imediata (nao espera \r\n\r\n porque o SoftwareSerial perde bytes a 115200)
+  bool achouAbrir = (_bufferWifi.indexOf("abrir") != -1);
+  bool achouFechar = (_bufferWifi.indexOf("trancar") != -1 || _bufferWifi.indexOf("fechar") != -1);
+
+  if (achouAbrir || achouFechar) {
+    // Tenta extrair o canal TCP, se existir
+    int ipdIdx = _bufferWifi.indexOf("+IPD,");
+    if (ipdIdx != -1) {
+      int virgula = _bufferWifi.indexOf(',', ipdIdx + 5);
+      if (virgula != -1) {
+        String canalStr = _bufferWifi.substring(ipdIdx + 5, virgula);
+        _canalAtual = canalStr.toInt();
+      }
+    }
+
+    if (achouAbrir) abrir = true;
+    if (achouFechar) fechar = true;
+
+    Serial.print(F("Comando validado pelo buffer: "));
+    Serial.println(achouAbrir ? "ABRIR" : "FECHAR");
+    
+    // Limpa o buffer para o proximo comando
+    _bufferWifi = ""; 
+  } 
+  // Limpeza de Lixo: se achou o fim da requisicao ou ta muito grande e sem utilidade
+  else if (_bufferWifi.indexOf("\r\n\r\n") != -1 || _bufferWifi.length() > 140) {
+    _bufferWifi = "";
+  }
 }
 
 /*
@@ -297,11 +303,10 @@ void responderOK(int canal) {
   String cmd = "AT+CIPSEND=" + String(canal) + "," + String(resposta.length());
   enviarAT(cmd, 500);
   esp.print(resposta);
-  delay(100);
+  delayLendoWifi(100);
   enviarAT("AT+CIPCLOSE=" + String(canal), 300);
 }
 
-// -------------------------------------------------------------------------
 void enviarAT(const String &cmd, unsigned int espera) {
   esp.println(cmd);
   unsigned long t = millis();
@@ -311,9 +316,34 @@ void enviarAT(const String &cmd, unsigned int espera) {
       char c = esp.read();
       Serial.write(c);
       resposta += c;
-      // Sai imediatamente se o ESP8266 ja respondeu, cortando o delay inútil!
-      if (resposta.endsWith("OK\r\n") || resposta.endsWith("ERROR\r\n") || resposta.endsWith("FAIL\r\n") || resposta.endsWith("CLOSED\r\n")) {
+      
+      // O SEGREDO DO BUG: Se o ESP receber o comando do App de abrir/fechar 
+      // BEM NA HORA que estiver ocupado mandando mensagem pro Django, o comando 
+      // era lido para a variavel 'resposta' local e JOGADO FORA.
+      // Agora nos salvamos tudo no buffer global enquanto esperamos!
+      _bufferWifi += c;
+      if (_bufferWifi.length() > 150) {
+        _bufferWifi = _bufferWifi.substring(50);
+      }
+
+      // Sai imediatamente se o ESP8266 ja respondeu
+      if (resposta.endsWith("OK\r\n") || resposta.endsWith("ERROR\r\n") || 
+          resposta.endsWith("FAIL\r\n") || resposta.endsWith("CLOSED\r\n")) {
         break;
+      }
+    }
+  }
+}
+
+// Substitui o delay() comum por um delay que nao para de ler o Wi-Fi
+void delayLendoWifi(unsigned int ms) {
+  unsigned long t = millis();
+  while (millis() - t < ms) {
+    if (esp.available()) {
+      char c = esp.read();
+      _bufferWifi += c;
+      if (_bufferWifi.length() > 150) {
+        _bufferWifi = _bufferWifi.substring(50);
       }
     }
   }
@@ -346,7 +376,7 @@ void notificarBackend(String status) {
   enviarAT(cmdSend, 1000);
 
   esp.print(requisicao);
-  delay(500);
+  delayLendoWifi(500); // Antes era delay() e perdia comandos!
 
   enviarAT("AT+CIPCLOSE=4", 500);
   Serial.println(F("Backend notificado."));

@@ -31,7 +31,32 @@ class PorteiraViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     # ── Abrir / Fechar ─────────────────────────────────────────────────────
-    def _mudar_status(self, request, novo_status):
+    def _mudar_status(self, request, novo_status, comando_arduino):
+        # 1. Envia comando físico para o Arduino e aguarda confirmação
+        from arduino_api.models import ConfiguracaoArduino
+        import urllib.request
+        
+        config = ConfiguracaoArduino.get_solo()
+        url = f'http://{config.ip}:{config.porta}/{comando_arduino}'
+        sucesso = False
+        
+        # Tenta 2 vezes rapidamente. Como o Arduino e o PC estão na mesma rede, 
+        # a resposta deve ser imediata. Um timeout de 2 segundos é mais que o suficiente.
+        for tentativa in range(2): 
+            try:
+                with urllib.request.urlopen(url, timeout=2.0) as resp:
+                    if resp.status == 200:
+                        sucesso = True
+                        break
+            except Exception:
+                pass # Tenta de novo imediatamente sem o "time.sleep" para ser mais rápido
+                
+        if not sucesso:
+            return Response({
+                'erro': 'A porteira física não respondeu. O status não foi alterado.'
+            }, status=502)
+
+        # 2. Arduino confirmou, atualiza banco de dados
         porteira = self.get_object()
         porteira.status = novo_status
         porteira.save(update_fields=['status'])
@@ -72,12 +97,12 @@ class PorteiraViewSet(viewsets.ModelViewSet):
             except ValueError:
                 pass  # formato inválido — ignora a restrição
 
-        return self._mudar_status(request, 'aberto')
+        return self._mudar_status(request, 'aberto', 'abrir')
 
     @action(detail=True, methods=['post'])
     def fechar(self, request, pk=None):
         """POST /api/porteiras/{id}/fechar/"""
-        return self._mudar_status(request, 'fechado')
+        return self._mudar_status(request, 'fechado', 'trancar')
 
     # ── Histórico de registros ─────────────────────────────────────────────
     @action(detail=True, methods=['get'])

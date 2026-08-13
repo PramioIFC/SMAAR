@@ -232,12 +232,13 @@ class AppStateData extends ChangeNotifier {
     final idx = _gates.indexWhere((g) => g.id == gateId);
     if (idx == -1) return;
 
-    final prev = _gates[idx];
-    _gates[idx] = prev.copyWith(isClosed: close);
-    notifyListeners();
-
     try {
+      // 1. Aguarda confirmação do backend (que agora aguarda o Arduino)
       final registro = await _gateRepo.updateGateStatus(gateId, close);
+      
+      // 2. Só agora atualiza o estado local
+      _gates[idx] = _gates[idx].copyWith(isClosed: close);
+
       final key = DateHelper.dateToKey(registro.date);
       _events
           .putIfAbsent(gateId, () => {})
@@ -258,11 +259,8 @@ class AppStateData extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
-      // Reverte o estado otimista
-      final i = _gates.indexWhere((g) => g.id == gateId);
-      if (i != -1) _gates[i] = prev;
-      notifyListeners();
-      rethrow;  // Propaga para a UI poder exibir o erro
+      // O erro já é propagado para a UI exibir a mensagem correta (ex: Arduino offline)
+      rethrow;  
     }
   }
 

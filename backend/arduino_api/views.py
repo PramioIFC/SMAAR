@@ -23,22 +23,28 @@ def enviar_comando(request):
     config = ConfiguracaoArduino.get_solo()
     url = f'http://{config.ip}:{config.porta}/{comando}'
 
-    try:
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            return Response({
-                'ok': True,
-                'comando': comando,
-                'arduino': url,
-                'status_arduino': resp.status,
-            })
-    except urllib.error.URLError as e:
-        return Response({
-            'ok': False,
-            'erro': f'Arduino não respondeu: {e.reason}',
-            'arduino': url,
-        }, status=502)
-    except Exception as e:
-        return Response({'ok': False, 'erro': str(e)}, status=500)
+    import time
+    
+    tentativas = 3
+    for tentativa in range(tentativas):
+        try:
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                return Response({
+                    'ok': True,
+                    'comando': comando,
+                    'arduino': url,
+                    'status_arduino': resp.status,
+                })
+        except urllib.error.URLError as e:
+            if tentativa == tentativas - 1:
+                return Response({
+                    'ok': False,
+                    'erro': f'Arduino não respondeu após {tentativas} tentativas: {e.reason}',
+                    'arduino': url,
+                }, status=502)
+            time.sleep(1) # Espera 1 segundo antes de tentar de novo
+        except Exception as e:
+            return Response({'ok': False, 'erro': str(e)}, status=500)
 
 
 @api_view(['GET', 'PUT'])
@@ -94,6 +100,14 @@ def sync_status_arduino(request):
     except Porteira.DoesNotExist:
         return Response({'erro': 'Porteira não encontrada.'}, status=404)
 
+    # -- Captura automática do IP do Arduino --
+    client_ip = request.META.get('REMOTE_ADDR')
+    if client_ip:
+        config = ConfiguracaoArduino.get_solo()
+        if config.ip != client_ip:
+            config.ip = client_ip
+            config.save(update_fields=['ip'])
+            
     if porteira.status != novo_status:
         porteira.status = novo_status
         porteira.save(update_fields=['status'])

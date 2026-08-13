@@ -24,7 +24,7 @@ class ApiClient {
   static const _keyRefresh    = 'refresh_token';
   static const _keyBaseUrl    = 'server_url';
   static const _defaultPort   = '8000';
-  static const _timeout        = Duration(seconds: 5);
+  static const _timeout        = Duration(seconds: 15);
 
   // ── URL do servidor ───────────────────────────────────────────────────────
 
@@ -77,6 +77,12 @@ class ApiClient {
     if (auth) {
       final token = await _storage.read(key: _keyAccess);
       if (token != null) headers['Authorization'] = 'Bearer $token';
+    }
+    // Ngrok free tier retorna uma página HTML de aviso ao invés de JSON
+    // sem este header — necessário em TODAS as requisições para o túnel.
+    final baseUrl = await _storage.read(key: _keyBaseUrl) ?? '';
+    if (baseUrl.contains('ngrok')) {
+      headers['ngrok-skip-browser-warning'] = 'true';
     }
     return headers;
   }

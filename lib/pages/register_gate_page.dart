@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import '../models/models.dart';
 
@@ -34,26 +35,142 @@ class _RegisterGatePageState extends State<RegisterGatePage> {
   // ── Selecionar horário com TimePicker ─────────────────────────────────────
 
   Future<void> _pickTime(TextEditingController controller) async {
-    final picked = await showTimePicker(
+    // Parse existing value if any
+    int initialHour = TimeOfDay.now().hour;
+    int initialMinute = TimeOfDay.now().minute;
+    
+    if (controller.text.isNotEmpty) {
+      final parts = controller.text.split(':');
+      if (parts.length == 2) {
+        initialHour = int.tryParse(parts[0]) ?? initialHour;
+        initialMinute = int.tryParse(parts[1]) ?? initialMinute;
+      }
+    }
+
+    final initialTime = DateTime(2020, 1, 1, initialHour, initialMinute);
+    DateTime tempTime = initialTime;
+
+    await showDialog(
       context: context,
-      initialTime: TimeOfDay.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF4CAF50),
-              onSurface: Colors.black87,
+      builder: (BuildContext builder) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
+          child: SizedBox(
+            height: 320,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Colors.black12)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancelar', style: TextStyle(color: Colors.black54, fontSize: 16)),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          final h = initialHour.toString().padLeft(2, '0');
+                          final m = initialMinute.toString().padLeft(2, '0');
+                          controller.text = "$h:$m";
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Salvar', style: TextStyle(color: Color(0xFF4CAF50), fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: StatefulBuilder(
+                    builder: (context, setSheetState) {
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          const Text(
+                            ":",
+                            style: TextStyle(
+                              fontSize: 40,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 90,
+                                child: ListWheelScrollView.useDelegate(
+                                  controller: FixedExtentScrollController(initialItem: initialHour),
+                                  itemExtent: 65,
+                                  diameterRatio: 1.5,
+                                  perspective: 0.003,
+                                  physics: const FixedExtentScrollPhysics(),
+                                  onSelectedItemChanged: (i) => setSheetState(() => initialHour = i),
+                                  childDelegate: ListWheelChildBuilderDelegate(
+                                    childCount: 24,
+                                    builder: (context, i) {
+                                      final isCenter = i == initialHour;
+                                      return Center(
+                                        child: AnimatedDefaultTextStyle(
+                                          duration: const Duration(milliseconds: 150),
+                                          style: TextStyle(
+                                            fontSize: isCenter ? 44 : 28,
+                                            fontWeight: isCenter ? FontWeight.bold : FontWeight.w500,
+                                            color: isCenter ? Colors.black87 : Colors.black26,
+                                          ),
+                                          child: Text(i.toString().padLeft(2, '0')),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 30),
+                              SizedBox(
+                                width: 90,
+                                child: ListWheelScrollView.useDelegate(
+                                  controller: FixedExtentScrollController(initialItem: initialMinute),
+                                  itemExtent: 65,
+                                  diameterRatio: 1.5,
+                                  perspective: 0.003,
+                                  physics: const FixedExtentScrollPhysics(),
+                                  onSelectedItemChanged: (i) => setSheetState(() => initialMinute = i),
+                                  childDelegate: ListWheelChildBuilderDelegate(
+                                    childCount: 60,
+                                    builder: (context, i) {
+                                      final isCenter = i == initialMinute;
+                                      return Center(
+                                        child: AnimatedDefaultTextStyle(
+                                          duration: const Duration(milliseconds: 150),
+                                          style: TextStyle(
+                                            fontSize: isCenter ? 44 : 28,
+                                            fontWeight: isCenter ? FontWeight.bold : FontWeight.w500,
+                                            color: isCenter ? Colors.black87 : Colors.black26,
+                                          ),
+                                          child: Text(i.toString().padLeft(2, '0')),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
+                  ),
+                ),
+              ],
             ),
           ),
-          child: child!,
         );
       },
     );
-    if (picked != null) {
-      final h = picked.hour.toString().padLeft(2, '0');
-      final m = picked.minute.toString().padLeft(2, '0');
-      controller.text = "$h:$m";
-    }
   }
 
   // ── Salvar e voltar com os dados ──────────────────────────────────────────

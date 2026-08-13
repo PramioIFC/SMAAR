@@ -57,7 +57,7 @@ class GateCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: const Color(0xFFE8F5E9),
-                  child: const Icon(Icons.door_front_door_rounded, color: Color(0xFF4CAF50), size: 30),
+                  child: const Icon(Icons.fence_rounded, color: Color(0xFF4CAF50), size: 30),
                 ),
                 const SizedBox(width: 16),
 

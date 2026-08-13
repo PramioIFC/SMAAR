@@ -37,9 +37,11 @@ class ApiAuthRepository implements AuthRepository {
       );
     } on ApiException catch (e) {
       if (e.statusCode == 401) return const AuthResult(status: AuthStatus.invalidCredentials);
-      return const AuthResult(status: AuthStatus.unknownError);
-    } catch (_) {
-      return const AuthResult(status: AuthStatus.unknownError);
+      // Mostra a mensagem real do servidor (ex: "Servidor não respondeu a tempo")
+      return AuthResult(status: AuthStatus.unknownError, rawMessage: e.message);
+    } catch (e) {
+      // Mostra o erro real (ex: SocketException, FormatException, etc.)
+      return AuthResult(status: AuthStatus.unknownError, rawMessage: e.toString());
     }
   }
 
@@ -70,9 +72,9 @@ class ApiAuthRepository implements AuthRepository {
       if (e.message.toLowerCase().contains('já existe')) {
         return const AuthResult(status: AuthStatus.userAlreadyExists);
       }
-      return const AuthResult(status: AuthStatus.unknownError);
-    } catch (_) {
-      return const AuthResult(status: AuthStatus.unknownError);
+      return AuthResult(status: AuthStatus.unknownError, rawMessage: e.message);
+    } catch (e) {
+      return AuthResult(status: AuthStatus.unknownError, rawMessage: e.toString());
     }
   }
 }

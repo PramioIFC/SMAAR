@@ -63,12 +63,13 @@ enum AuthStatus { success, invalidCredentials, userNotFound, userAlreadyExists, 
 class AuthResult {
   final AuthStatus status;
   final User? user;
+  final String? rawMessage; // Erro real (timeout, socket, etc.)
 
-  const AuthResult({required this.status, this.user});
+  const AuthResult({required this.status, this.user, this.rawMessage});
 
   bool get isSuccess => status == AuthStatus.success;
 
-  String get message => switch (status) {
+  String get message => rawMessage ?? switch (status) {
         AuthStatus.success            => 'Sucesso',
         AuthStatus.invalidCredentials => 'Nome ou senha incorretos',
         AuthStatus.userNotFound       => 'Usuário não encontrado',

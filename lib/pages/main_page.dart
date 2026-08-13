@@ -204,7 +204,7 @@ class MainPage extends StatelessWidget {
         ),
       ),
 
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final result = await Navigator.push<Gate>(
             context,
@@ -215,9 +215,18 @@ class MainPage extends StatelessWidget {
           }
         },
         backgroundColor: const Color(0xFF4CAF50),
-        elevation: 3,
-        child: const Icon(Icons.add, color: Colors.white, size: 30),
+        elevation: 4,
+        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+        label: const Text(
+          "Nova Porteira",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 

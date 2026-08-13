@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models/models.dart';
@@ -14,6 +15,15 @@ class GatePage extends StatefulWidget {
 class _GatePageState extends State<GatePage> {
   int? _gateId;
   bool _initialized = false;
+  bool _isLoadingAction = false;
+  bool _isLongLoading = false;
+  Timer? _loadingTimer;
+
+  @override
+  void dispose() {
+    _loadingTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -45,33 +55,33 @@ class _GatePageState extends State<GatePage> {
 
   Future<void> _handleAction(BuildContext context, bool close, int? gateId) async {
     if (gateId == null) return;
+    
+    setState(() {
+      _isLoadingAction = true;
+      _isLongLoading = false;
+    });
+
+    _loadingTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _isLoadingAction) {
+        setState(() => _isLongLoading = true);
+      }
+    });
+    
     try {
-      // Atualiza o status no banco (histórico, calendário, etc.)
+      // 1. Envia comando para o servidor (que envia pro Arduino e salva se der certo)
       await AppState.of(context).toggleGate(gateId, close);
-      // [CORRIGIDO] Sem isso, o Arduino nunca recebia o comando HTTP —
-      // só o banco de dados mudava de status, a porteira física não.
-      if (!context.mounted) return;
-      ApiClient().enviarComandoArduino(close ? 'trancar' : 'abrir').then((ok) {
-        if (!ok && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Status salvo, mas o Arduino não respondeu. '
-                'Verifique se ele está ligado e na mesma rede.',
-              ),
-              backgroundColor: Color(0xFFD32F2F),
-            ),
-          );
-        }
-      });
     } catch (e) {
       if (!context.mounted) return;
-      // Extrai a mensagem de erro do backend (ex: "Fora do horário permitido")
+      
       String msg = 'Erro ao alterar porteira.';
-      final eStr = e.toString();
-      if (eStr.contains('403')) {
-        msg = 'Horário não permitido';
+      final eStr = e.toString().toLowerCase();
+      
+      if (eStr.contains('403') || eStr.contains('horário') || eStr.contains('permitido')) {
+        msg = 'Ação fora do horário permitido.';
+      } else if (e.toString().contains('ApiException: ')) {
+        msg = e.toString().split('ApiException: ').last;
       }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),
@@ -79,7 +89,16 @@ class _GatePageState extends State<GatePage> {
         ),
       );
     }
+
+    if (context.mounted) {
+      _loadingTimer?.cancel();
+      setState(() {
+        _isLoadingAction = false;
+        _isLongLoading = false;
+      });
+    }
   }
+
 
   Future<void> _abrirConfigArduino(BuildContext context, Gate gate) async {
     // Busca o IP atual salvo no backend
@@ -377,6 +396,26 @@ class _GatePageState extends State<GatePage> {
   }
 
   Widget _buildActionButtons(BuildContext context, Gate gate) {
+    if (_isLoadingAction) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20.0),
+          child: Column(
+            children: [
+              const CircularProgressIndicator(),
+              if (_isLongLoading) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Aguarde, a conexão pode demorar...',
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
     return Row(
       children: [
         Expanded(
