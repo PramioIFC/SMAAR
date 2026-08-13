@@ -1,43 +1,5 @@
 /*
-  SMAAR - Controlador de Porteira
-  Versao corrigida (rodada 3)
- 
-  Correcoes desta rodada
-    7. [MUDANCA DE LOGICA] A porteira agora trava sozinha em dois pontos
-       fisicos diferentes, cada um com seu proprio ima e seu proprio servo
-         - SENSOR_MAG1 detecta a porteira travada no BATENTE (posicao de
-           casa/fechada). O servoTrava e quem segura essa trava.
-         - SENSOR_MAG2 detecta a porteira travada no PALANQUE (posicao
-           aberta). O servoAbertura e quem segura essa trava.
-       'Abrir' (comando ou botao) destrava o lado do batente (servoTrava),
-       deixando a porteira livre pra ir ate o palanque, onde ela trava
-       sozinha via ima 2. 'Fechar' destrava o lado do palanque
-       (servoAbertura), deixando a porteira voltar e travar sozinha no
-       batente via ima 1. Os comandos NAO travam nada diretamente - eles
-       so liberam o lado oposto ao que esta travado no momento.
-    8. [CORRIGIDO] Antes, se um comando Wi-Fi chegasse num estado em que a
-       acao nao podia ser executada (ex pediu abrir mas a porteira nao
-       estava travada no batente), o Arduino nunca respondia ao Django -
-       reintroduzindo o erro de timeout que a rodada 2 ja tinha corrigido.
-       Agora ele SEMPRE responde se recebeu um comando neste ciclo, mesmo
-       quando a acao e ignorada por estado incompativel.
-    9. [A CALIBRAR] TEMPO_DESTRAVE_TRAVA e TEMPO_DESTRAVE_ABERTURA sao
-       valores conservadores de partida (1500ms e 500ms). Eles definem
-       quanto tempo o Arduino espera, segurando a resposta HTTP, depois de
-       destravar o servo. Ajuste com base no teste fisico - mas fique de
-       olho no timeout configurado no lado do Django/Flutter pra nao
-       reintroduzir o erro do item 8.
- 
-  Correcoes de rodadas anteriores (mantidas)
-    1. Canal TCP extraido dinamicamente do +IPD,canal - responderOK
-       nao hardcoda mais o canal 0, evitando 502 no Django.
-    2. Wi-Fi realmente conecta a rede (CWJAP descomentado).
-    3. lerComandoWifi() nao bloqueia mais o loop usa buffer global e
-       processa quando encontra fim de frame HTTP.
-    4. aplicarEstadoTravado() coloca delay entre os dois servos no boot
-       para evitar reset por pico de corrente.
-    6. responderOK() calcula Content-Length dinamicamente.
-*/
+  SMAAR - Controlador de Porteira*/
 
 #include <Servo.h>
 #include <SoftwareSerial.h>
