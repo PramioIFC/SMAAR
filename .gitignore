@@ -50,3 +50,9 @@ app.*.map.json
 # Firebase Keys
 firebase-credentials.json
 google-services.json
+
+# Local/private configuration
+config.h
+**/config.h
+*.env.local
+liback.zip

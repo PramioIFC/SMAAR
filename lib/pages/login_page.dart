@@ -5,8 +5,9 @@ import '../repositories/repositories/auth_repository.dart';
 import '../services/api_client.dart';
 import '../services/notification_service.dart';
 
-// URL pública fixa do Ngrok — atualizar aqui se o domínio mudar
-const _kNgrokUrl = 'https://seu-dominio.ngrok-free.app';
+// Informe em tempo de build com:
+// flutter run --dart-define=SMAAR_PUBLIC_URL=https://seu-dominio.example
+const _kNgrokUrl = String.fromEnvironment('SMAAR_PUBLIC_URL');
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -77,7 +78,8 @@ class _LoginPageState extends State<LoginPage> {
             _isDiscovering = false;
             // Se não encontrou ngm local, muda para Ngrok (exceto se o usuário tiver digitado algo personalizado)
             final current = _serverController.text;
-            if (current.isEmpty || current.startsWith(RegExp(r'^(192\.|10\.|172\.)'))) {
+            if (_kNgrokUrl.isNotEmpty &&
+                (current.isEmpty || current.startsWith(RegExp(r'^(192\.|10\.|172\.)')))) {
               _serverController.text = _kNgrokUrl;
             }
           });
@@ -89,7 +91,8 @@ class _LoginPageState extends State<LoginPage> {
         setState(() {
           _isDiscovering = false;
           final current = _serverController.text;
-          if (current.isEmpty || current.startsWith(RegExp(r'^(192\.|10\.|172\.)'))) {
+          if (_kNgrokUrl.isNotEmpty &&
+              (current.isEmpty || current.startsWith(RegExp(r'^(192\.|10\.|172\.)')))) {
             _serverController.text = _kNgrokUrl;
           }
         });

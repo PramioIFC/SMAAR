@@ -7,6 +7,13 @@ echo   SMAAR - Iniciando Servidor Django + Ngrok
 echo ================================================
 echo.
 
+if "%SMAAR_NGROK_DOMAIN%"=="" (
+    echo [ERRO] Defina SMAAR_NGROK_DOMAIN antes de iniciar.
+    echo Exemplo: set SMAAR_NGROK_DOMAIN=seu-dominio.ngrok-free.app
+    pause
+    exit /b 1
+)
+
 :: Verifica se o ngrok esta instalado
 where ngrok >nul 2>&1
 if %errorlevel% neq 0 (
@@ -18,9 +25,9 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/2] Iniciando tunel Ngrok...
-echo       URL publica: https://seu-dominio.ngrok-free.app
+echo       URL publica: https://%SMAAR_NGROK_DOMAIN%
 echo.
-start "SMAAR - Ngrok" cmd /k "ngrok http --domain=seu-dominio.ngrok-free.app 8000"
+start "SMAAR - Ngrok" cmd /k "ngrok http --domain=%SMAAR_NGROK_DOMAIN% 8000"
 
 :: Pequena espera para o Ngrok inicializar
 timeout /t 3 /nobreak >nul
@@ -38,7 +45,7 @@ if exist "..\venv\Scripts\activate.bat" (
 
 echo ================================================
 echo   Servidor rodando em: http://localhost:8000
-echo   Acesso externo via:  https://seu-dominio.ngrok-free.app
+echo   Acesso externo via:  https://%SMAAR_NGROK_DOMAIN%
 echo   Pressione Ctrl+C para parar o Django
 echo ================================================
 echo.

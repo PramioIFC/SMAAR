@@ -1,302 +1,166 @@
-# SMAAR — Sistema de Monitoramento de Abertura e Registro
+# SMAAR
 
-App Flutter + backend Django para controle de porteiras rurais, com acionamento físico via Arduino + ESP8266.
+> Sistema de Monitoramento de Abertura e Registro para controle e acompanhamento de porteiras rurais.
 
-**Funcionalidades principais:**
-- Abrir/fechar porteiras pelo celular (Wi-Fi local ou 4G via Ngrok)
-- Monitoramento em tempo real (status atualiza a cada 3s)
-- Histórico completo de aberturas e fechamentos com calendário
-- Notificações push no celular (abertura manual, alerta fora de horário)
-- Conexão automática: o app encontra o servidor sozinho (rede local) ou usa Ngrok (4G)
-- Captura automática do IP do Arduino pelo backend
+O SMAAR integra um aplicativo Flutter, uma API Django e um controlador Arduino com ESP8266. Pelo celular, é possível consultar o estado da porteira, enviar comandos e acompanhar o histórico de movimentações.
 
----
+## Recursos
 
-## ⚡ Execução Rápida (após tudo instalado)
+- Controle remoto de abertura e fechamento
+- Atualização periódica do estado da porteira
+- Histórico de eventos com visualização por calendário
+- Cadastro de usuários e autenticação JWT
+- Notificações push com Firebase
+- Descoberta do servidor na rede local
+- Acesso externo opcional por túnel Ngrok
+- Sincronização de comandos físicos do Arduino com o backend
 
-> Use isso no dia a dia, toda vez que for usar o sistema.
+## Arquitetura
 
-### No computador (servidor):
-
-**Dê dois cliques em:**
+```text
+Aplicativo Flutter ── HTTP/JWT ──► API Django ── HTTP ──► Arduino + ESP8266
+       ▲                              │                         │
+       └──── histórico e estado ──────┴──── eventos físicos ────┘
 ```
-iniciar_servidor.bat
-```
-Isso abre automaticamente o **Django** + **Ngrok** juntos. Pronto.
 
-### No celular (app):
+## Tecnologias
 
-1. Abra o **SMAAR**
-2. Digite seu **usuário** e **senha**
-3. Toque em **Entrar**
-
-O app se conecta sozinho — sem digitar IP ou URL. Se estiver na mesma rede Wi-Fi do computador, usa a rede local. Se estiver no 4G, usa o túnel Ngrok automaticamente.
-
-> **Requisito:** O computador precisa estar ligado e com o `iniciar_servidor.bat` rodando.
-
----
-
-## Requisitos
-
-| Componente | Requisito |
+| Camada | Tecnologias |
 |---|---|
-| Python | 3.10+ |
-| Banco de dados | PostgreSQL instalado e rodando |
-| Flutter SDK | Instalado e no PATH |
-| Ngrok | Instalado e autenticado (`winget install ngrok.ngrok`) |
-| Firebase | Projeto criado + `google-services.json` + `firebase-credentials.json` |
-| Dispositivo | Celular Android (qualquer rede — funciona no 4G via Ngrok) |
-| Hardware | Arduino Uno + módulo ESP8266 (para acionamento físico) |
+| Aplicativo | Flutter e Dart |
+| API | Django, Django REST Framework e Simple JWT |
+| Banco de dados | PostgreSQL |
+| Hardware | Arduino Uno, ESP8266, servos e sensores magnéticos |
+| Integrações opcionais | Firebase Cloud Messaging e Ngrok |
 
----
+## Pré-requisitos
 
-## Guia Completo (do zero ao funcionando)
+- Flutter SDK
+- Python 3.10 ou superior
+- PostgreSQL
+- Arduino IDE com as bibliotecas `Servo` e `SoftwareSerial`
+- Ngrok e Firebase somente se os respectivos recursos forem utilizados
 
-### 1. Banco de dados (PostgreSQL)
+## Configuração segura
 
-Abra o **psql** ou o pgAdmin e execute:
+O repositório não contém senhas, tokens, endereços privados nem credenciais do Firebase. Não envie ao Git os arquivos locais criados nas etapas abaixo.
 
-```sql
-CREATE DATABASE smaar;
-CREATE USER smaar_user WITH PASSWORD 'smaar1234';
-GRANT ALL PRIVILEGES ON DATABASE smaar TO smaar_user;
-```
+### 1. Backend
 
-### 2. Backend Django
-
-```bash
-cd backend
-pip install -r requirements.txt
-python manage.py migrate
-```
-
-O arquivo `.env` já está configurado com as credenciais acima. Se você usou outros valores no banco, edite o `.env`:
-
-```
-SECRET_KEY=qualquer-string-longa-aqui
-DB_ENGINE=django.db.backends.postgresql
-DB_NAME=smaar
-DB_USER=smaar_user
-DB_PASSWORD=smaar1234
-DB_HOST=localhost
-DB_PORT=5432
-```
-
-### 3. Ngrok (acesso remoto / 4G)
-
-Instale e configure uma única vez:
+Crie o ambiente virtual, instale as dependências e copie o modelo de variáveis:
 
 ```powershell
-# Instalar
-winget install ngrok.ngrok
-
-# Autenticar com sua conta (gratuita em ngrok.com)
-ngrok config add-authtoken SEU_TOKEN_AQUI
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-> Seu token está em: https://dashboard.ngrok.com/get-started/your-authtoken
+Edite `backend/.env` com valores próprios. Gere uma chave Django, por exemplo, com:
 
-Se você tiver um domínio estático diferente de `seu-dominio.ngrok-free.app`, edite a linha no `iniciar_servidor.bat` e no topo do `lib/pages/login_page.dart` (`_kNgrokUrl`).
+```powershell
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
 
-### 4. App Flutter
+Crie previamente o banco e o usuário informados no `.env`. Depois execute:
 
-Com o celular conectado via USB (modo desenvolvedor ativado):
+```powershell
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver 0.0.0.0:8000
+```
 
-```bash
+Para popular dados de demonstração, defina `SMAAR_SEED_ADMIN_PASSWORD` no `.env` e rode `python manage.py seed`.
+
+### 2. Arduino e ESP8266
+
+Copie `config.example.h` para `config.h` na raiz do projeto:
+
+```powershell
+Copy-Item config.example.h config.h
+```
+
+Preencha no arquivo local:
+
+- `SMAAR_WIFI_SSID`: nome da rede Wi-Fi
+- `SMAAR_WIFI_PASSWORD`: senha da rede
+- `SMAAR_DJANGO_IP`: IP do computador que executa o Django
+
+Abra `arduino.ino` na Arduino IDE, conecte a placa e grave o firmware. O arquivo `config.h` está ignorado pelo Git.
+
+### 3. Aplicativo Flutter
+
+Instale os pacotes e execute o aplicativo:
+
+```powershell
+flutter pub get
 flutter run
 ```
 
-Ou gere o APK para instalar sem cabo:
+Para habilitar uma URL pública de fallback no aplicativo:
 
-```bash
-flutter build apk --release
+```powershell
+flutter run --dart-define=SMAAR_PUBLIC_URL=https://seu-dominio.example
 ```
 
-O APK fica em `build/app/outputs/flutter-apk/app-release.apk`.
+Sem essa opção, informe manualmente o endereço do servidor na tela de login ou use a descoberta pela rede local.
 
-### 5. Arduino
+### 4. Acesso externo com Ngrok
 
-1. Abra o arquivo `arduino.ino` na Arduino IDE
-2. Edite a linha com o nome e senha da sua rede Wi-Fi:
-   ```cpp
-   enviarAT("AT+CWJAP=\"NomeDaRede\",\"SenhaDaRede\"", 10000);
-   ```
-3. Edite o IP do seu computador (onde o Django está rodando):
-   ```cpp
-   const String DJANGO_IP = "192.168.1.100";
-   ```
-4. Grave o firmware no Arduino
-5. Abra o **Monitor Serial** (115200 baud) para verificar o IP atribuído
+Após instalar e autenticar o Ngrok, defina o domínio na sessão do terminal:
 
----
-
-## Como testar a conexão (sem Arduino)
-
-Para testar apenas a comunicação celular ↔ servidor:
-
-1. Dê dois cliques em `iniciar_servidor.bat`
-2. Abra o app no celular
-3. Faça login
-
-Se a tela principal carregar com suas porteiras → **conexão funcionando!**
-
-Ao apertar os botões ABRIR/FECHAR sem Arduino conectado, o app vai atualizar a tela e registrar no banco, mas vai exibir um aviso: *"Status salvo, mas o Arduino não respondeu."* — isso é o comportamento esperado.
-
----
-
-## Configuração do Firebase (Notificações Push)
-
-As notificações push exigem uma configuração única no Firebase:
-
-### No console do Firebase (https://console.firebase.google.com):
-
-1. Crie um projeto (ou use um existente)
-2. Adicione um app Android com o package name `com.example.smaar`
-3. Baixe o `google-services.json` e coloque em `android/app/`
-4. Vá em **Configurações do Projeto > Contas de serviço**
-5. Clique em **"Gerar nova chave privada"**
-6. Salve o arquivo como `firebase-credentials.json` dentro da pasta `backend/`
-
-> **⚠️ IMPORTANTE:** Esses dois arquivos contêm chaves sensíveis e já estão no `.gitignore`. Nunca suba eles para o GitHub!
-
----
-
-## Circuito do Arduino
-
-| Componente | Pino Arduino |
-|---|---|
-| ESP8266 RX | 11 (TX do Arduino via SoftwareSerial) |
-| ESP8266 TX | 10 (RX do Arduino via SoftwareSerial) |
-| Servo trava (batente) | 9 |
-| Servo abertura (palanque) | 8 |
-| Sensor magnético 1 (batente) | 2 |
-| Sensor magnético 2 (palanque) | 3 |
-| Botão abrir | 5 |
-| Botão fechar/toggle | 4 |
-| LED vermelho | 6 |
-| LED verde | 7 |
-
-> **Alimentação do ESP8266:** use uma fonte 3.3V externa com pelo menos 500mA (ex: módulo AMS1117 3.3V com capacitor de 100µF). O pino 3.3V do Arduino fornece no máximo 50mA e causa resets.
-
----
-
-## Trocar de rede (escola, fazenda, casa)
-
-### O que muda automaticamente:
-- **IP do servidor Django no app:** Auto-discovery via UDP (rede local) ou Ngrok (4G)
-- **IP do Arduino no backend:** Capturado automaticamente quando o Arduino envia o primeiro `sync-status`
-
-### O que precisa configurar manualmente:
-- **Wi-Fi do Arduino:** Edite o nome/senha da rede no `arduino.ino` e regrave na placa
-- **IP do Django no Arduino:** Edite `DJANGO_IP` no `arduino.ino` e regrave
-
-Os dados (porteiras, histórico, usuários) ficam no banco PostgreSQL — nada é perdido ao trocar de rede.
-
----
-
-## Fluxo de comunicação
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    FLUXO PELO APP (4G via Ngrok)                │
-│                                                                 │
-│  Celular (Flutter) ──[4G]──► Ngrok ──► Django (local)          │
-│       │  POST /api/porteiras/{id}/abrir/                        │
-│       ▼                                                         │
-│  Django ──► GET http://<IP_ARDUINO>:80/abrir  (rede local)      │
-│       ▼                                                         │
-│  Arduino aciona servo → responde 200 OK                         │
-│       ▼                                                         │
-│  Django → 200 OK → Ngrok → Celular                              │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│                 FLUXO PELO BOTÃO FÍSICO                         │
-│                                                                 │
-│  Botão físico / Sensor magnético                                │
-│       │  Arduino detecta mudança                                │
-│       ▼                                                         │
-│  Arduino                                                        │
-│       │  POST /api/arduino/sync-status/  (rede local)           │
-│       │  {"porteira_id": 1, "status": "aberto"}                 │
-│       ▼                                                         │
-│  Backend Django                                                 │
-│       │  Atualiza banco + captura IP do Arduino                 │
-│       │  Envia push notification (Firebase)                     │
-│       ▼                                                         │
-│  Celular — recebe notificação com vibração                      │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│              CONEXÃO AUTOMÁTICA DO APP                          │
-│                                                                 │
-│  1) Tenta UDP broadcast "DISCOVER_SMAAR" na rede local          │
-│       Se encontrar → usa IP local (ex: 192.168.x.x:8000)       │
-│                                                                 │
-│  2) Após 3s sem resposta → usa Ngrok automaticamente            │
-│       seu-dominio.ngrok-free.app                   │
-│                                                                 │
-│  O usuário não precisa configurar nada.                         │
-└─────────────────────────────────────────────────────────────────┘
+```powershell
+$env:SMAAR_NGROK_DOMAIN = "seu-dominio.ngrok-free.app"
+.\iniciar_servidor.bat
 ```
 
----
+Adicione a URL completa também a `CSRF_TRUSTED_ORIGINS` no arquivo `.env`.
 
-## Estrutura do projeto
+### 5. Firebase (opcional)
 
-```
-smaar-porteira/
-├── iniciar_servidor.bat           # ⚡ Clique duplo para iniciar tudo
-├── backend/                       # API Django (Python)
-│   ├── .env                       # Configurações do banco e chave secreta
-│   ├── manage.py
-│   ├── requirements.txt
-│   ├── firebase-credentials.json  # Chave do Firebase (NÃO committar!)
-│   ├── smaarback/                 # Configurações gerais do Django
-│   ├── usuarios/                  # Cadastro e autenticação JWT
-│   ├── porteiras/                 # CRUD de porteiras e registros
-│   ├── core/                      # Push notifications + Auto-Discovery UDP
-│   │   ├── apps.py                # Servidor UDP para discovery
-│   │   ├── push.py                # Lógica de envio de push notifications
-│   │   └── models.py              # FCMToken (tokens de dispositivos)
-│   └── arduino_api/               # Endpoint de comando e config do Arduino
-│       ├── models.py              # ConfiguracaoArduino (IP + porta)
-│       ├── views.py               # /comando/, /config/, /sync-status/
-│       └── admin.py               # Visível no painel admin
-├── lib/                           # App Flutter
-│   ├── main.dart
-│   ├── app_state.dart             # Estado global do app
-│   ├── services/
-│   │   ├── api_client.dart        # Cliente HTTP com URL dinâmica
-│   │   └── notification_service.dart  # Push notifications local
-│   ├── pages/
-│   │   ├── login_page.dart        # Login + Auto-Discovery + fallback Ngrok
-│   │   ├── main_page.dart         # Lista de porteiras
-│   │   ├── gate_page.dart         # Controle da porteira
-│   │   ├── calendar_page.dart     # Histórico por calendário
-│   │   └── ...
-│   ├── models/
-│   ├── repositories/
-│   └── widgets/
-├── android/
-│   └── app/
-│       └── google-services.json   # Config Firebase Android (NÃO committar!)
-└── arduino.ino                    # Firmware do Arduino
+Para notificações push:
+
+1. Cadastre o aplicativo Android no Firebase.
+2. Salve `google-services.json` em `android/app/`.
+3. Gere uma chave de conta de serviço.
+4. Salve-a como `backend/firebase-credentials.json`.
+
+Esses arquivos estão no `.gitignore` e nunca devem ser publicados.
+
+## Ligações do hardware
+
+| Componente | Pino do Arduino |
+|---|---:|
+| ESP8266 RX / TX | 11 / 10 |
+| Servo do batente | 9 |
+| Servo do palanque | 8 |
+| Sensores magnéticos | 2 e 3 |
+| Botões abrir / fechar | 5 / 4 |
+| LEDs vermelho / verde | 6 / 7 |
+
+> Alimente o ESP8266 com uma fonte externa de 3,3 V capaz de fornecer pelo menos 500 mA. O pino de 3,3 V do Arduino pode não fornecer corrente suficiente.
+
+## Estrutura principal
+
+```text
+SMAAR/
+├── android/, ios/, linux/, macos/, web/, windows/  # plataformas Flutter
+├── lib/                                             # aplicativo
+├── backend/                                         # API Django
+├── arduino.ino                                      # firmware
+├── config.example.h                                 # modelo sem credenciais
+└── iniciar_servidor.bat                             # Django + Ngrok no Windows
 ```
 
----
+## Boas práticas de segurança
 
-## Usuário administrador (opcional)
+- Mantenha `.env`, `config.h` e arquivos do Firebase fora do Git.
+- Use senhas diferentes para banco, administrador, Wi-Fi e serviços externos.
+- Troque imediatamente qualquer credencial que já tenha sido exposta.
+- Restrinja `ALLOWED_HOSTS`, CORS e origens CSRF antes de colocar o sistema em produção.
+- Use HTTPS para acesso fora da rede local.
 
-Para acessar o painel admin em `http://localhost:8000/admin`:
+## Licença
 
-```bash
-cd backend
-python manage.py createsuperuser
-```
-
-No admin você consegue ver e editar:
-- Configuração do IP do Arduino
-- Porteiras cadastradas
-- Registros de abertura/fechamento
-- Tokens FCM dos dispositivos
+Defina uma licença antes de distribuir ou reutilizar o projeto publicamente.

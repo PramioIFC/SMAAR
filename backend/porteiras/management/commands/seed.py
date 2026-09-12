@@ -1,10 +1,11 @@
 """
 python manage.py seed
 """
+import os
 from datetime import date, timedelta, time
 
 from django.contrib.auth.models import User
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from porteiras.models import Porteira, RegistroPorteira
 
@@ -39,10 +40,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         user, criado = User.objects.get_or_create(username='admin')
         if criado:
-            user.set_password('ALTERE_ESTA_SENHA')
+            password = os.getenv('SMAAR_SEED_ADMIN_PASSWORD')
+            if not password:
+                raise CommandError('Defina SMAAR_SEED_ADMIN_PASSWORD antes de executar o seed.')
+            user.set_password(password)
             user.is_staff = True
             user.save()
-            self.stdout.write(self.style.SUCCESS("Usuário 'admin' criado (senha: ALTERE_ESTA_SENHA)"))
+            self.stdout.write(self.style.SUCCESS("Usuário 'admin' criado com a senha definida no ambiente."))
         else:
             self.stdout.write("Usuário 'admin' já existe.")
 
@@ -71,4 +75,4 @@ class Command(BaseCommand):
 
             self.stdout.write(f"    → {porteira.registros.count()} registros criados.")
 
-        self.stdout.write(self.style.SUCCESS('\nSeed concluído! Login: admin / ALTERE_ESTA_SENHA'))
+        self.stdout.write(self.style.SUCCESS('\nSeed concluído! Login: admin'))

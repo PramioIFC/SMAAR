@@ -1,8 +1,10 @@
 /*
-  SMAAR - Controlador de Porteira*/
+  SMAAR - Controlador de Porteira
+*/
 
 #include <Servo.h>
 #include <SoftwareSerial.h>
+#include "config.h"
 
 // -- Wi-Fi ----------------------------------------------------------------
 SoftwareSerial esp(10, 11);    // RX=10, TX=11
@@ -28,7 +30,7 @@ const unsigned long TEMPO_DESTRAVE_TRAVA    = 4000;  // ms - lado batente (abrir
 const unsigned long TEMPO_DESTRAVE_ABERTURA = 500;   // ms - lado palanque (fechar)
 
 // -- Configuracao do Backend Django ---------------------------------------
-const String DJANGO_IP   = "192.168.x.x";  // <-- IP LOCAL DO SEU PC (Wi-Fi)
+const String DJANGO_IP   = SMAAR_DJANGO_IP;
 const int    DJANGO_PORT = 8000;
 const int    PORTEIRA_ID = 1;
 
@@ -86,7 +88,8 @@ void setup() {
   enviarAT("AT+CWMODE=1", 500);
 
   Serial.println(F("Conectando ao Wi-Fi..."));
-  enviarAT("AT+CWJAP=\"Nomerede\",\"Senharede\"", 10000);
+  enviarAT("AT+CWJAP=\"" + String(SMAAR_WIFI_SSID) + "\",\"" +
+           String(SMAAR_WIFI_PASSWORD) + "\"", 10000);
   delay(2000);
 
   // Exibe o IP no Serial Monitor - anote para configurar no app
