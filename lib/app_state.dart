@@ -12,6 +12,7 @@ import 'services/api_client.dart';
 /// populado via API no login e atualizado após cada ação.
 class AppStateData extends ChangeNotifier {
   final GateRepository _gateRepo;
+  final bool enablePolling;
 
   // ── Sessão ─────────────────────────────────────────────────────────────────
   User? _currentUser;
@@ -23,7 +24,10 @@ class AppStateData extends ChangeNotifier {
 
   bool _polling = false;
 
-  AppStateData({required GateRepository gateRepo}) : _gateRepo = gateRepo;
+  AppStateData({
+    required GateRepository gateRepo,
+    this.enablePolling = true,
+  }) : _gateRepo = gateRepo;
 
   // ── Porteiras ──────────────────────────────────────────────────────────────
   final List<Gate> _gates = [];
@@ -113,6 +117,7 @@ class AppStateData extends ChangeNotifier {
   // assíncrono que só espera 3s DEPOIS de cada checagem terminar.
 
   void _startPolling() {
+    if (!enablePolling) return;
     if (_polling) return;
     _polling = true;
     _pollLoop();
