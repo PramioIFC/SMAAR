@@ -25,16 +25,6 @@ Controle inteligente de porteiras rurais, do campo à tela do celular.
 
 ---
 
-## 📱 Prévia do aplicativo
-
-<div align="center">
-
-![Prévia visual das telas de login, porteiras e controle do SMAAR](docs/images/smaar-app-preview.png)
-
-<sub>Mockup demonstrativo criado a partir da interface do projeto. Alguns dados e elementos foram preenchidos apenas para apresentação.</sub>
-
-</div>
-
 ## ✨ Sobre o projeto
 
 O **SMAAR** conecta um aplicativo Flutter, uma API Django e um controlador Arduino com ESP8266 para monitorar e controlar porteiras rurais.
