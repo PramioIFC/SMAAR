@@ -1,29 +1,79 @@
-# SMAAR
+<div align="center">
 
-> Sistema de Monitoramento de Abertura e Registro para controle e acompanhamento de porteiras rurais.
+# 🌾 SMAAR
 
-O SMAAR integra um aplicativo Flutter, uma API Django e um controlador Arduino com ESP8266. Pelo celular, é possível consultar o estado da porteira, enviar comandos e acompanhar o histórico de movimentações.
+### Sistema de Monitoramento de Abertura e Registro
 
-## Recursos
+Controle inteligente de porteiras rurais, do campo à tela do celular.
 
-- Controle remoto de abertura e fechamento
-- Atualização periódica do estado da porteira
-- Histórico de eventos com visualização por calendário
-- Cadastro de usuários e autenticação JWT
-- Notificações push com Firebase
-- Descoberta do servidor na rede local
-- Acesso externo opcional por túnel Ngrok
-- Sincronização de comandos físicos do Arduino com o backend
+[![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev/)
+[![Django](https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
+[![Arduino](https://img.shields.io/badge/Arduino-00878F?style=for-the-badge&logo=arduino&logoColor=white)](https://www.arduino.cc/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 
-## Arquitetura
+![Status](https://img.shields.io/badge/status-em%20desenvolvimento-F2A900?style=flat-square)
+![Plataforma](https://img.shields.io/badge/plataforma-mobile%20%2B%20IoT-6C63FF?style=flat-square)
+![Segurança](https://img.shields.io/badge/segredos-fora%20do%20Git-2EA44F?style=flat-square)
 
-```text
-Aplicativo Flutter ── HTTP/JWT ──► API Django ── HTTP ──► Arduino + ESP8266
-       ▲                              │                         │
-       └──── histórico e estado ──────┴──── eventos físicos ────┘
+[Visão geral](#-sobre-o-projeto) •
+[Funcionalidades](#-funcionalidades) •
+[Instalação](#-instalação) •
+[Hardware](#-hardware) •
+[Segurança](#-segurança)
+
+</div>
+
+---
+
+## ✨ Sobre o projeto
+
+O **SMAAR** conecta um aplicativo Flutter, uma API Django e um controlador Arduino com ESP8266 para monitorar e controlar porteiras rurais.
+
+Pelo celular, o usuário consulta o estado da porteira, envia comandos de abertura ou fechamento e acompanha o histórico de movimentações. Eventos realizados fisicamente também são sincronizados com o sistema.
+
+> [!IMPORTANT]
+> O repositório não armazena senhas, tokens, IPs privados ou credenciais do Firebase. Todas as configurações particulares ficam em arquivos locais ignorados pelo Git.
+
+## 🚀 Funcionalidades
+
+| | Recurso | Descrição |
+|:---:|---|---|
+| 📱 | Controle remoto | Abertura e fechamento pelo aplicativo |
+| 🔄 | Estado sincronizado | Atualização periódica e eventos físicos enviados ao backend |
+| 🗓️ | Histórico | Registro de movimentações com visualização por calendário |
+| 🔐 | Autenticação | Cadastro de usuários e sessões protegidas com JWT |
+| 🔔 | Notificações | Alertas no celular usando Firebase Cloud Messaging |
+| 📡 | Descoberta local | Localização automática do servidor dentro da rede |
+| 🌐 | Acesso externo | Suporte opcional a túnel seguro com Ngrok |
+
+## 🧩 Arquitetura
+
+```mermaid
+flowchart LR
+    APP[📱 Aplicativo Flutter]
+    API[⚙️ API Django]
+    DB[(🗄️ PostgreSQL)]
+    BOARD[🔌 Arduino + ESP8266]
+    GATE[🚪 Porteira]
+
+    APP <-->|HTTP + JWT| API
+    API <--> DB
+    API <-->|Comandos e eventos| BOARD
+    BOARD <--> GATE
 ```
 
-## Tecnologias
+<details>
+<summary><strong>Como os dados percorrem o sistema</strong></summary>
+
+1. O aplicativo autentica o usuário na API Django.
+2. A API registra comandos e consulta o estado no PostgreSQL.
+3. O backend envia o comando ao ESP8266 pela rede local.
+4. O Arduino aciona os servos e acompanha os sensores magnéticos.
+5. Mudanças físicas retornam ao backend e aparecem no aplicativo.
+
+</details>
+
+## 🛠️ Tecnologias
 
 | Camada | Tecnologias |
 |---|---|
@@ -31,23 +81,21 @@ Aplicativo Flutter ── HTTP/JWT ──► API Django ── HTTP ──► Ar
 | API | Django, Django REST Framework e Simple JWT |
 | Banco de dados | PostgreSQL |
 | Hardware | Arduino Uno, ESP8266, servos e sensores magnéticos |
-| Integrações opcionais | Firebase Cloud Messaging e Ngrok |
+| Integrações | Firebase Cloud Messaging e Ngrok |
 
-## Pré-requisitos
+## 📋 Pré-requisitos
 
 - Flutter SDK
 - Python 3.10 ou superior
 - PostgreSQL
-- Arduino IDE com as bibliotecas `Servo` e `SoftwareSerial`
-- Ngrok e Firebase somente se os respectivos recursos forem utilizados
+- Arduino IDE com `Servo` e `SoftwareSerial`
+- Ngrok e Firebase, caso esses recursos sejam utilizados
 
-## Configuração segura
+## ⚡ Instalação
 
-O repositório não contém senhas, tokens, endereços privados nem credenciais do Firebase. Não envie ao Git os arquivos locais criados nas etapas abaixo.
+### 1. Backend Django
 
-### 1. Backend
-
-Crie o ambiente virtual, instale as dependências e copie o modelo de variáveis:
+Crie o ambiente virtual e instale as dependências:
 
 ```powershell
 cd backend
@@ -57,13 +105,13 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Edite `backend/.env` com valores próprios. Gere uma chave Django, por exemplo, com:
+Edite `backend/.env` com as configurações do seu banco. Para gerar uma chave Django segura:
 
 ```powershell
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-Crie previamente o banco e o usuário informados no `.env`. Depois execute:
+Depois de criar o banco e o usuário informados no `.env`:
 
 ```powershell
 python manage.py migrate
@@ -71,96 +119,132 @@ python manage.py createsuperuser
 python manage.py runserver 0.0.0.0:8000
 ```
 
-Para popular dados de demonstração, defina `SMAAR_SEED_ADMIN_PASSWORD` no `.env` e rode `python manage.py seed`.
+<details>
+<summary><strong>Carregar dados de demonstração</strong></summary>
+
+Defina `SMAAR_SEED_ADMIN_PASSWORD` no arquivo `.env` e execute:
+
+```powershell
+python manage.py seed
+```
+
+</details>
 
 ### 2. Arduino e ESP8266
 
-Copie `config.example.h` para `config.h` na raiz do projeto:
+Crie sua configuração local a partir do modelo:
 
 ```powershell
 Copy-Item config.example.h config.h
 ```
 
-Preencha no arquivo local:
+Preencha o novo arquivo com seus próprios dados:
 
-- `SMAAR_WIFI_SSID`: nome da rede Wi-Fi
-- `SMAAR_WIFI_PASSWORD`: senha da rede
-- `SMAAR_DJANGO_IP`: IP do computador que executa o Django
+| Variável | Finalidade |
+|---|---|
+| `SMAAR_WIFI_SSID` | Nome da rede Wi-Fi |
+| `SMAAR_WIFI_PASSWORD` | Senha da rede Wi-Fi |
+| `SMAAR_DJANGO_IP` | IP do computador que executa o backend |
 
-Abra `arduino.ino` na Arduino IDE, conecte a placa e grave o firmware. O arquivo `config.h` está ignorado pelo Git.
+Abra `arduino.ino` na Arduino IDE, conecte a placa e grave o firmware. O arquivo `config.h` é ignorado pelo Git.
 
 ### 3. Aplicativo Flutter
-
-Instale os pacotes e execute o aplicativo:
 
 ```powershell
 flutter pub get
 flutter run
 ```
 
-Para habilitar uma URL pública de fallback no aplicativo:
+Para incluir uma URL pública de fallback no aplicativo:
 
 ```powershell
 flutter run --dart-define=SMAAR_PUBLIC_URL=https://seu-dominio.example
 ```
 
-Sem essa opção, informe manualmente o endereço do servidor na tela de login ou use a descoberta pela rede local.
+Sem esse parâmetro, informe o servidor na tela de login ou utilize a descoberta automática pela rede local.
 
 ### 4. Acesso externo com Ngrok
 
-Após instalar e autenticar o Ngrok, defina o domínio na sessão do terminal:
+Após instalar e autenticar o Ngrok:
 
 ```powershell
 $env:SMAAR_NGROK_DOMAIN = "seu-dominio.ngrok-free.app"
 .\iniciar_servidor.bat
 ```
 
-Adicione a URL completa também a `CSRF_TRUSTED_ORIGINS` no arquivo `.env`.
+Inclua a URL completa em `CSRF_TRUSTED_ORIGINS`, dentro do arquivo `backend/.env`.
 
-### 5. Firebase (opcional)
+### 5. Notificações com Firebase
 
-Para notificações push:
+<details>
+<summary><strong>Ver configuração opcional</strong></summary>
 
 1. Cadastre o aplicativo Android no Firebase.
 2. Salve `google-services.json` em `android/app/`.
 3. Gere uma chave de conta de serviço.
-4. Salve-a como `backend/firebase-credentials.json`.
+4. Salve a chave como `backend/firebase-credentials.json`.
 
-Esses arquivos estão no `.gitignore` e nunca devem ser publicados.
+Os dois arquivos são ignorados pelo Git e não devem ser publicados.
 
-## Ligações do hardware
+</details>
+
+## 🔌 Hardware
 
 | Componente | Pino do Arduino |
-|---|---:|
-| ESP8266 RX / TX | 11 / 10 |
-| Servo do batente | 9 |
-| Servo do palanque | 8 |
-| Sensores magnéticos | 2 e 3 |
-| Botões abrir / fechar | 5 / 4 |
-| LEDs vermelho / verde | 6 / 7 |
+|---|:---:|
+| ESP8266 RX / TX | `11` / `10` |
+| Servo do batente | `9` |
+| Servo do palanque | `8` |
+| Sensores magnéticos | `2` e `3` |
+| Botões abrir / fechar | `5` / `4` |
+| LEDs vermelho / verde | `6` / `7` |
 
-> Alimente o ESP8266 com uma fonte externa de 3,3 V capaz de fornecer pelo menos 500 mA. O pino de 3,3 V do Arduino pode não fornecer corrente suficiente.
+> [!WARNING]
+> Alimente o ESP8266 com uma fonte externa de **3,3 V e pelo menos 500 mA**. O pino de 3,3 V do Arduino pode não fornecer corrente suficiente e causar reinicializações.
 
-## Estrutura principal
+## 📁 Estrutura do projeto
 
 ```text
 SMAAR/
-├── android/, ios/, linux/, macos/, web/, windows/  # plataformas Flutter
-├── lib/                                             # aplicativo
+├── android/, ios/, linux/, macos/, web/, windows/  # Plataformas Flutter
+├── lib/                                             # Aplicativo mobile
+│   ├── pages/                                       # Telas
+│   ├── services/                                    # API e notificações
+│   ├── repositories/                                # Acesso aos dados
+│   └── widgets/                                     # Componentes visuais
 ├── backend/                                         # API Django
-├── arduino.ino                                      # firmware
-├── config.example.h                                 # modelo sem credenciais
-└── iniciar_servidor.bat                             # Django + Ngrok no Windows
+│   ├── usuarios/                                    # Contas e autenticação
+│   ├── porteiras/                                   # Porteiras e histórico
+│   ├── arduino_api/                                 # Comunicação com hardware
+│   └── core/                                        # Serviços compartilhados
+├── arduino.ino                                      # Firmware principal
+├── config.example.h                                 # Modelo de configuração
+└── iniciar_servidor.bat                             # Inicialização no Windows
 ```
 
-## Boas práticas de segurança
+## 🔒 Segurança
 
-- Mantenha `.env`, `config.h` e arquivos do Firebase fora do Git.
-- Use senhas diferentes para banco, administrador, Wi-Fi e serviços externos.
-- Troque imediatamente qualquer credencial que já tenha sido exposta.
-- Restrinja `ALLOWED_HOSTS`, CORS e origens CSRF antes de colocar o sistema em produção.
-- Use HTTPS para acesso fora da rede local.
+- ✅ `.env`, `config.h` e credenciais do Firebase ficam fora do Git.
+- ✅ Os modelos públicos contêm somente valores de exemplo.
+- ✅ Tokens JWT são armazenados com `FlutterSecureStorage`.
+- ⚠️ Use senhas diferentes para banco, administrador, Wi-Fi e serviços externos.
+- ⚠️ Restrinja `ALLOWED_HOSTS`, CORS e origens CSRF antes de publicar a API.
+- ⚠️ Use HTTPS sempre que o sistema estiver acessível fora da rede local.
 
-## Licença
+## 🗺️ Próximos passos
 
-Defina uma licença antes de distribuir ou reutilizar o projeto publicamente.
+- [ ] Calibrar os tempos dos servos no hardware definitivo
+- [ ] Adicionar testes automatizados de integração
+- [ ] Preparar configuração de produção do Django
+- [ ] Documentar a montagem física com fotos ou diagrama elétrico
+- [ ] Definir uma licença para o projeto
+
+---
+
+<div align="center">
+
+Feito para aproximar **tecnologia, segurança e campo**. 🌱
+
+**SMAAR — controle na mão, porteira sob supervisão.**
+
+</div>
