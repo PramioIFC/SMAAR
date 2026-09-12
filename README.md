@@ -29,9 +29,7 @@ Controle inteligente de porteiras rurais, do campo à tela do celular.
 
 <div align="center">
 
-![Telas reais do SMAAR: porteiras, gerenciamento, histórico diário e calendário](docs/images/smaar-telas.png)
-
-<sub>Capturas renderizadas diretamente dos widgets Flutter com dados locais de demonstração.</sub>
+![Telas do SMAAR: porteiras, gerenciamento, histórico diário e calendário](docs/images/smaar-telas.png)
 
 </div>
 
